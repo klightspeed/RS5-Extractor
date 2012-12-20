@@ -55,6 +55,7 @@ namespace RS5_Extractor
                 {
                     Console.WriteLine("Saving immobile model {0}", dirent.Key);
                     model.Save();
+                    model.SaveFused();
                 }
             }
 
@@ -66,6 +67,7 @@ namespace RS5_Extractor
                 {
                     Console.WriteLine("Saving animated model {0}", dirent.Key);
                     model.Save();
+                    model.SaveFused();
                 }
             }
         }

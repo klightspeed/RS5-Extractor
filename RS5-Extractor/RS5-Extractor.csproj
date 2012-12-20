@@ -60,6 +60,8 @@
     <Compile Include="DotNetZip\Zlib\ZlibCodec.cs" />
     <Compile Include="DotNetZip\Zlib\ZlibConstants.cs" />
     <Compile Include="DotNetZip\Zlib\ZlibStream.cs" />
+    <Compile Include="Joint.cs" />
+    <Compile Include="JointInfluence.cs" />
     <Compile Include="Model.cs" />
     <Compile Include="Point3D.cs" />
     <Compile Include="Program.cs" />

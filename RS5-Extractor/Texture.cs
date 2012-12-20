@@ -386,7 +386,7 @@ namespace RS5_Extractor
             catch
             {
                 File.WriteAllBytes(DDSFilename, Data);
-                File.SetLastWriteTime(DDSFilename, ModTime);
+                File.SetLastWriteTimeUtc(DDSFilename, ModTime);
             }
         }
 
