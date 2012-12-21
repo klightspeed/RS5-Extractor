@@ -51,11 +51,11 @@ namespace RS5_Extractor
             foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in dirents.Where(d => d.Value.Type == "IMDL"))
             {
                 ImmobileModel model = new ImmobileModel(dirent.Value);
-                if (!File.Exists(model.ColladaFilename))
+                if (!File.Exists(model.ColladaMultimeshFilename))
                 {
                     Console.WriteLine("Saving immobile model {0}", dirent.Key);
+                    model.SaveMultimesh();
                     model.Save();
-                    model.SaveFused();
                 }
             }
 
@@ -63,11 +63,21 @@ namespace RS5_Extractor
             foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in dirents.Where(d => d.Value.Type == "AMDL"))
             {
                 AnimatedModel model = new AnimatedModel(dirent.Value);
-                if (!File.Exists(model.ColladaFilename))
+                if (!File.Exists(model.ColladaMultimeshFilename))
                 {
                     Console.WriteLine("Saving animated model {0}", dirent.Key);
+
                     model.Save();
-                    model.SaveFused();
+
+                    if (model.Textures.Count != 1)
+                    {
+                        model.SaveMultimesh();
+                    }
+                    
+                    if (model.IsAnimated)
+                    {
+                        model.SaveAnimated();
+                    }
                 }
             }
         }

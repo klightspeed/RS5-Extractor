@@ -111,7 +111,23 @@ namespace RS5_Extractor
             this.Name = dirent.Name;
             this.ModTime = dirent.ModTime;
         }
+
+        public bool IsAnimated
+        {
+            get
+            {
+                return Animations.Count != 0;
+            }
+        }
         
+        public string ColladaMultimeshFilename
+        {
+            get
+            {
+                return ".\\" + Name + ".multimesh.dae";
+            }
+        }
+
         public string ColladaFilename
         {
             get
@@ -120,15 +136,15 @@ namespace RS5_Extractor
             }
         }
 
-        public string ColladaFusedFilename
+        public string ColladaAnimatedFilename
         {
             get
             {
-                return ".\\" + Name + ".fused.dae";
+                return ".\\" + Name + ".animated.dae";
             }
         }
 
-        protected void Save(string filename, bool fused)
+        protected void Save(string filename, bool fused, bool animated)
         {
             string dir = Path.GetDirectoryName(filename);
             if (!Directory.Exists(dir))
@@ -140,21 +156,26 @@ namespace RS5_Extractor
             {
                 using (XmlWriter writer = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = Encoding.UTF8, Indent = true }))
                 {
-                    WriteColladaXml(writer, fused);
+                    WriteColladaXml(writer, fused, animated);
                 }
             }
 
             File.SetLastWriteTimeUtc(filename, ModTime);
         }
 
-        public void Save()
+        public void SaveMultimesh()
         {
-            Save(ColladaFilename, false);
+            Save(ColladaMultimeshFilename, false, false);
         }
 
-        public void SaveFused()
+        public void Save()
         {
-            Save(ColladaFusedFilename, true);
+            Save(ColladaFilename, true, false);
+        }
+
+        public void SaveAnimated()
+        {
+            Save(ColladaAnimatedFilename, true, true);
         }
 
         protected float[,] InvertTransformMatrix(float[,] matrix)
@@ -723,7 +744,7 @@ namespace RS5_Extractor
             return vertices;
         }
         
-        public void WriteColladaXml(XmlWriter writer, bool fused)
+        public void WriteColladaXml(XmlWriter writer, bool fused, bool animate)
         {
             writer.WriteStartElement("COLLADA", "http://www.collada.org/2005/11/COLLADASchema");
             writer.WriteAttributeString("version", "1.4.1");
@@ -843,7 +864,7 @@ namespace RS5_Extractor
                     writer.WriteStartElement("library_controllers");
                     WriteColladaXmlJointsSkin(writer, "model-mesh", "model-skel", "model-skin", vertices, joints);
                     writer.WriteEndElement(); // library_controllers
-                    if (Animations.Count != 0)
+                    if (Animations.Count != 0 && animate)
                     {
                         writer.WriteStartElement("library_animations");
                         WriteColladaXmlAnimation(writer, "model-anim", "model-skel", Animations);
