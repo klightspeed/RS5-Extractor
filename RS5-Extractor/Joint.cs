@@ -9,6 +9,7 @@ namespace RS5_Extractor
     {
         public string Name;
         public float[,] Matrix;
+        public float[,] InitialPose;
         public int JointNum;
         public int ParentNum;
         public Joint Parent;

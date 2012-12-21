@@ -47,6 +47,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AnimationSequence.cs" />
     <Compile Include="DotNetZip\CommonSrc\CRC32.cs" />
     <Compile Include="DotNetZip\Zlib\Deflate.cs" />
     <Compile Include="DotNetZip\Zlib\DeflateStream.cs" />

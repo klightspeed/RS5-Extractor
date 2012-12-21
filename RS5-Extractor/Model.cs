@@ -64,6 +64,19 @@ namespace RS5_Extractor
             }
         }
 
+        private Dictionary<string, AnimationSequence> _Animations;
+        public Dictionary<string, AnimationSequence> Animations
+        {
+            get
+            {
+                if (_Animations == null)
+                {
+                    FillModel();
+                }
+                return _Animations;
+            }
+        }
+
         public Joint RootJoint
         {
             get
@@ -213,7 +226,116 @@ namespace RS5_Extractor
                 matrix[3,0] * vector[0] + matrix[3,1] * vector[1] + matrix[3,2] * vector[2] + matrix[3,3] * vector[3]
             };
         }
-        
+
+        protected void WriteColladaXmlAnimation(XmlWriter writer, string animationname, string skeletonname, Dictionary<string, AnimationSequence> sequences)
+        {
+            writer.WriteStartElement("animation");
+            foreach (KeyValuePair<string, AnimationSequence> sequence_kvp in sequences)
+            {
+                string seqname = sequence_kvp.Key;
+                string seqid = animationname + "-" + seqname;
+                AnimationSequence sequence = sequence_kvp.Value;
+                writer.WriteStartElement("animation");
+                writer.WriteAttributeString("id", seqid);
+                writer.WriteAttributeString("name", seqname);
+                writer.WriteStartElement("source");
+                writer.WriteAttributeString("id", seqid + "-time");
+                writer.WriteStartElement("float_array");
+                writer.WriteAttributeString("id", seqid + "-time-array");
+                writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
+                for (int i = 0; i < sequence.Frames.Count; i++)
+                {
+                    writer.WriteString(String.Format("{0:F3} ", i / sequence.FrameRate + 1.0));
+                }
+                writer.WriteEndElement(); // float_array
+                writer.WriteStartElement("technique_common");
+                writer.WriteStartElement("accessor");
+                writer.WriteAttributeString("source", "#" + seqid + "-time-array");
+                writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
+                writer.WriteAttributeString("stride", "1");
+                writer.WriteStartElement("param");
+                writer.WriteAttributeString("name", "TIME");
+                writer.WriteAttributeString("type", "float");
+                writer.WriteEndElement(); // param
+                writer.WriteEndElement(); // accessor
+                writer.WriteEndElement(); // technique_common
+                writer.WriteEndElement(); // source
+                writer.WriteStartElement("source");
+                writer.WriteAttributeString("id", seqid + "-out-xfrm");
+                writer.WriteStartElement("float_array");
+                writer.WriteAttributeString("id", seqid + "-out-xfrm-array");
+                writer.WriteAttributeString("count", (sequence.Frames.Count * 16).ToString());
+                for (int n = 0; n < sequence.Frames.Count; n++)
+                {
+                    writer.WriteWhitespace("\n");
+                    for (int j = 0; j < 4; j++)
+                    {
+                        for (int i = 0; i < 4; i++)
+                        {
+                            writer.WriteString(String.Format("{0,8:F5} ", sequence.Frames[n][j, i]));
+                        }
+                    }
+                }
+                writer.WriteWhitespace("\n");
+                writer.WriteEndElement(); // float_array
+                writer.WriteStartElement("technique_common");
+                writer.WriteStartElement("accessor");
+                writer.WriteAttributeString("source", "#" + seqid + "-out-xfrm-array");
+                writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
+                writer.WriteAttributeString("stride", "16");
+                writer.WriteStartElement("param");
+                writer.WriteAttributeString("name", "MATRIX");
+                writer.WriteAttributeString("type", "float4x4");
+                writer.WriteEndElement(); // param
+                writer.WriteEndElement(); // accessor
+                writer.WriteEndElement(); // technique_common
+                writer.WriteEndElement(); // source
+                writer.WriteStartElement("source");
+                writer.WriteAttributeString("id", seqid + "-interp");
+                writer.WriteStartElement("Name_array");
+                writer.WriteAttributeString("id", seqid + "-interp-array");
+                writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
+                for (int i = 0; i < sequence.Frames.Count; i++)
+                {
+                    writer.WriteString("LINEAR ");
+                }
+                writer.WriteEndElement(); // Name_array
+                writer.WriteStartElement("technique_common");
+                writer.WriteStartElement("accessor");
+                writer.WriteAttributeString("source", "#" + seqid + "-interp-array");
+                writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
+                writer.WriteAttributeString("stride", "1");
+                writer.WriteStartElement("param");
+                writer.WriteAttributeString("name", "INTERPOLATION");
+                writer.WriteAttributeString("type", "name");
+                writer.WriteEndElement(); // param
+                writer.WriteEndElement(); // accessor
+                writer.WriteEndElement(); // technique_common
+                writer.WriteEndElement(); // source
+                writer.WriteStartElement("sampler");
+                writer.WriteAttributeString("id", seqid + "-xfrm");
+                writer.WriteStartElement("input");
+                writer.WriteAttributeString("semantic", "INPUT");
+                writer.WriteAttributeString("source", "#" + seqid + "-time");
+                writer.WriteEndElement(); // input
+                writer.WriteStartElement("input");
+                writer.WriteAttributeString("semantic", "OUTPUT");
+                writer.WriteAttributeString("source", "#" + seqid + "-out-xfrm");
+                writer.WriteEndElement(); // input
+                writer.WriteStartElement("input");
+                writer.WriteAttributeString("semantic", "INTERPOLATION");
+                writer.WriteAttributeString("source", "#" + seqid + "-interp");
+                writer.WriteEndElement(); // input
+                writer.WriteEndElement(); // sampler
+                writer.WriteStartElement("channel");
+                writer.WriteAttributeString("source", "#" + seqid + "-xfrm");
+                writer.WriteAttributeString("target", skeletonname + "-" + seqname + "/transform.MATRIX");
+                writer.WriteEndElement(); // channel
+                writer.WriteEndElement(); // animation
+            }
+            writer.WriteEndElement(); // animation
+        }
+
         protected void WriteColladaXmlJointsSkin(XmlWriter writer, string geometryname, string skeletonname, string skinname, List<Vertex> vertices, List<Joint> joints)
         {
             writer.WriteStartElement("controller");
@@ -254,7 +376,6 @@ namespace RS5_Extractor
                 writer.WriteWhitespace("\n");
                 for (int j = 0; j < 4; j++)
                 {
-                    writer.WriteWhitespace("\n");
                     for (int i = 0; i < 4; i++)
                     {
                         writer.WriteString(String.Format("{0,8:F5} ", joint.Matrix[j, i]));
@@ -354,13 +475,17 @@ namespace RS5_Extractor
                 };
             }
 
-            if (parentmatrix[3,0] != 0 || parentmatrix[3,1] != 0 || parentmatrix[3,2] != 0 || parentmatrix[3,3] != 1)
+            if (joint.InitialPose == null)
             {
-                throw new InvalidDataException("parent matrix not a transformation matrix");
-            }
+                if (parentmatrix[3, 0] != 0 || parentmatrix[3, 1] != 0 || parentmatrix[3, 2] != 0 || parentmatrix[3, 3] != 1)
+                {
+                    throw new InvalidDataException("parent matrix not a transformation matrix");
+                }
 
-            float[,] invmatrix = InvertTransformMatrix(joint.Matrix);
-            float[,] relmatrix = MultiplyMatrix(parentmatrix, invmatrix);
+                float[,] invmatrix = InvertTransformMatrix(joint.Matrix);
+                float[,] relmatrix = MultiplyMatrix(parentmatrix, invmatrix);
+                joint.InitialPose = relmatrix;
+            }
 
             writer.WriteStartElement("node");
             writer.WriteAttributeString("id", skeletonname + "-" + joint.Name);
@@ -368,12 +493,13 @@ namespace RS5_Extractor
             writer.WriteAttributeString("sid", joint.Name);
             writer.WriteAttributeString("type", "JOINT");
             writer.WriteStartElement("matrix");
+            writer.WriteAttributeString("sid", "transform");
             for (int j = 0; j < 4; j++)
             {
                 writer.WriteWhitespace("\n");
                 for (int i = 0; i < 4; i++)
                 {
-                    writer.WriteString(String.Format("{0,8:F5} ", relmatrix[j,i]));
+                    writer.WriteString(String.Format("{0,8:F5} ", joint.InitialPose[j,i]));
                 }
             }
             writer.WriteWhitespace("\n");
@@ -717,6 +843,12 @@ namespace RS5_Extractor
                     writer.WriteStartElement("library_controllers");
                     WriteColladaXmlJointsSkin(writer, "model-mesh", "model-skel", "model-skin", vertices, joints);
                     writer.WriteEndElement(); // library_controllers
+                    if (Animations.Count != 0)
+                    {
+                        writer.WriteStartElement("library_animations");
+                        WriteColladaXmlAnimation(writer, "model-anim", "model-skel", Animations);
+                        writer.WriteEndElement(); // library_animations
+                    }
                 }
             }
             else
@@ -775,6 +907,7 @@ namespace RS5_Extractor
             _Triangles = new List<Triangle>();
             _Textures = new Dictionary<string, Texture>();
             _Joints = new Dictionary<string, Joint>();
+            _Animations = new Dictionary<string, AnimationSequence>();
             FillModelImpl();
         }
 
@@ -830,6 +963,7 @@ namespace RS5_Extractor
                                 V = -VTXL.Data.GetSingle(vtxofs + 28),
                             },
                             Texture = texture,
+                            Diffuse = Color.FromArgb(VTXL.Data.GetInt32(vtxofs + 12)),
                             ExtraData = VTXL.Data.GetBytes(vtxofs + 12, 12)
                         });
                     }
@@ -865,11 +999,8 @@ namespace RS5_Extractor
             RS5Chunk BLKS = Chunk.Chunks["BLKS"];
             RS5Chunk VTXS = Chunk.Chunks["VTXS"];
             RS5Chunk INDS = Chunk.Chunks["INDS"];
-            RS5Chunk JNTS = null;
-            if (Chunk.Chunks.ContainsKey("JNTS"))
-            {
-                JNTS = Chunk.Chunks["JNTS"];
-            }
+            RS5Chunk JNTS = Chunk.Chunks.ContainsKey("JNTS") ? Chunk.Chunks["JNTS"] : null;
+            RS5Chunk FRMS = Chunk.Chunks.ContainsKey("FRMS") ? Chunk.Chunks["FRMS"] : null;
 
             for (int texnum = 0; texnum < BLKS.Data.Count / 144; texnum++)
             {
@@ -906,9 +1037,9 @@ namespace RS5_Extractor
                                 U = VTXS.Data.GetSingle(vtxofs + 12),
                                 V = -VTXS.Data.GetSingle(vtxofs + 16)
                             },
+                            Diffuse = Color.FromArgb(VTXS.Data.GetInt32(vtxofs + 20)),
                             Texture = texture,
-                            JointInfluence = (new int[] { 0, 1, 2, 3 }).Select(i => new JointInfluence { JointIndex = VTXS.Data[vtxofs + 24 + i], Influence = VTXS.Data[vtxofs + 28 + i] / 255.0F }).Where(j => j.Influence != 0).ToArray(),
-                            ExtraData = VTXS.Data.GetBytes(vtxofs + 20, 12)
+                            JointInfluence = (new int[] { 0, 1, 2, 3 }).Select(i => new JointInfluence { JointIndex = VTXS.Data[vtxofs + 24 + i], Influence = VTXS.Data[vtxofs + 28 + i] / 255.0F }).Where(j => j.Influence != 0).ToArray()
                         });
                     }
 
@@ -942,19 +1073,6 @@ namespace RS5_Extractor
                         { JNTS.Data.GetSingle(jntofs + 136), JNTS.Data.GetSingle(jntofs + 152), JNTS.Data.GetSingle(jntofs + 168), JNTS.Data.GetSingle(jntofs + 184) },
                         { JNTS.Data.GetSingle(jntofs + 140), JNTS.Data.GetSingle(jntofs + 156), JNTS.Data.GetSingle(jntofs + 172), JNTS.Data.GetSingle(jntofs + 188) }
                     };
-                    /*
-                    double yaw = -Math.Atan2(revbindmatrix[1, 0], revbindmatrix[0, 0]);
-                    float[,] matrixcorrection = new float[4, 4]
-                    {
-                        { (float)Math.Cos(yaw), (float)-Math.Sin(yaw), 0, 0 },
-                        { (float)Math.Sin(yaw), (float)Math.Cos(yaw), 0, 0 },
-                        { 0, 0, 1, 0 },
-                        { 0, 0, 0, 1 }
-                    };
-                    revbindmatrix = MultiplyMatrix(revbindmatrix, matrixcorrection);
-                    revbindmatrix[0, 3] = -revbindmatrix[0, 3];
-                    revbindmatrix = MultiplyMatrix(revbindmatrix, matrixcorrection);
-                     */
 
                     Joint joint = new Joint
                     {
@@ -970,6 +1088,34 @@ namespace RS5_Extractor
                 {
                     joint.Parent = Joints.Values.Where(j => j.JointNum == joint.ParentNum).FirstOrDefault();
                     joint.Children = Joints.Values.Where(j => j.ParentNum == joint.JointNum).ToArray();
+                }
+
+                if (FRMS != null && FRMS.Data != null)
+                {
+                    Joint[] joints = Joints.Values.ToArray();
+                    
+                    for (int jntnum = 0; jntnum < joints.Length; jntnum++)
+                    {
+                        AnimationSequence anim = new AnimationSequence();
+                        anim.FrameRate = 10.0F;
+                        for (int frameno = 0; frameno < FRMS.Data.Count / (joints.Length * 64); frameno++)
+                        {
+                            int frameofs = (frameno * Joints.Count + jntnum) * 64;
+                            float[,] transform = new float[4, 4]
+                            {
+                                { FRMS.Data.GetSingle(frameofs +  0), FRMS.Data.GetSingle(frameofs + 16), FRMS.Data.GetSingle(frameofs + 32), FRMS.Data.GetSingle(frameofs + 48) },
+                                { FRMS.Data.GetSingle(frameofs +  4), FRMS.Data.GetSingle(frameofs + 20), FRMS.Data.GetSingle(frameofs + 36), FRMS.Data.GetSingle(frameofs + 52) },
+                                { FRMS.Data.GetSingle(frameofs +  8), FRMS.Data.GetSingle(frameofs + 24), FRMS.Data.GetSingle(frameofs + 40), FRMS.Data.GetSingle(frameofs + 56) },
+                                { FRMS.Data.GetSingle(frameofs + 12), FRMS.Data.GetSingle(frameofs + 28), FRMS.Data.GetSingle(frameofs + 44), FRMS.Data.GetSingle(frameofs + 60) }
+                            };
+                            if (frameno == 0)
+                            {
+                                joints[jntnum].InitialPose = transform;
+                            }
+                            anim.Frames.Add(transform);
+                        }
+                        Animations[joints[jntnum].Name] = anim;
+                    }
                 }
             }
         }
