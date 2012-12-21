@@ -503,8 +503,7 @@ namespace RS5_Extractor
                     throw new InvalidDataException("parent matrix not a transformation matrix");
                 }
 
-                float[,] invmatrix = InvertTransformMatrix(joint.Matrix);
-                float[,] relmatrix = MultiplyMatrix(parentmatrix, invmatrix);
+                float[,] relmatrix = MultiplyMatrix(parentmatrix, InvertTransformMatrix(joint.Matrix));
                 joint.InitialPose = relmatrix;
             }
 
@@ -517,13 +516,11 @@ namespace RS5_Extractor
             writer.WriteAttributeString("sid", "transform");
             for (int j = 0; j < 4; j++)
             {
-                writer.WriteWhitespace("\n");
                 for (int i = 0; i < 4; i++)
                 {
                     writer.WriteString(String.Format("{0,8:F5} ", joint.InitialPose[j,i]));
                 }
             }
-            writer.WriteWhitespace("\n");
             writer.WriteEndElement(); // matrix
             foreach (Joint childjoint in joint.Children)
             {
@@ -1023,6 +1020,14 @@ namespace RS5_Extractor
             RS5Chunk JNTS = Chunk.Chunks.ContainsKey("JNTS") ? Chunk.Chunks["JNTS"] : null;
             RS5Chunk FRMS = Chunk.Chunks.ContainsKey("FRMS") ? Chunk.Chunks["FRMS"] : null;
 
+            float[,] roottransform = new float[4, 4]
+            {
+                { 1, 0, 0, 0 },
+                { 0, 0, -1, 0 },
+                { 0, 1, 0, 0 },
+                { 0, 0, 0, 1 }
+            };
+
             for (int texnum = 0; texnum < BLKS.Data.Count / 144; texnum++)
             {
                 int texofs = texnum * 144;
@@ -1050,8 +1055,8 @@ namespace RS5_Extractor
                             Position = new Point3D
                             {
                                 X = VTXS.Data.GetSingle(vtxofs + 0),
-                                Y = VTXS.Data.GetSingle(vtxofs + 4),
-                                Z = VTXS.Data.GetSingle(vtxofs + 8)
+                                Z = VTXS.Data.GetSingle(vtxofs + 4),
+                                Y = -VTXS.Data.GetSingle(vtxofs + 8)
                             },
                             TexCoord = new TextureCoordinate
                             {
@@ -1095,6 +1100,8 @@ namespace RS5_Extractor
                         { JNTS.Data.GetSingle(jntofs + 140), JNTS.Data.GetSingle(jntofs + 156), JNTS.Data.GetSingle(jntofs + 172), JNTS.Data.GetSingle(jntofs + 188) }
                     };
 
+                    revbindmatrix = MultiplyMatrix(revbindmatrix, InvertTransformMatrix(roottransform));
+
                     Joint joint = new Joint
                     {
                         Name = JNTS.Data.GetString(jntofs, 128),
@@ -1109,6 +1116,14 @@ namespace RS5_Extractor
                 {
                     joint.Parent = Joints.Values.Where(j => j.JointNum == joint.ParentNum).FirstOrDefault();
                     joint.Children = Joints.Values.Where(j => j.ParentNum == joint.JointNum).ToArray();
+                    if (joint.Parent == null)
+                    {
+                        joint.InitialPose = InvertTransformMatrix(joint.Matrix);
+                    }
+                    else
+                    {
+                        joint.InitialPose = MultiplyMatrix(joint.Parent.Matrix, InvertTransformMatrix(joint.Matrix));
+                    }
                 }
 
                 if (FRMS != null && FRMS.Data != null)
@@ -1129,10 +1144,17 @@ namespace RS5_Extractor
                                 { FRMS.Data.GetSingle(frameofs +  8), FRMS.Data.GetSingle(frameofs + 24), FRMS.Data.GetSingle(frameofs + 40), FRMS.Data.GetSingle(frameofs + 56) },
                                 { FRMS.Data.GetSingle(frameofs + 12), FRMS.Data.GetSingle(frameofs + 28), FRMS.Data.GetSingle(frameofs + 44), FRMS.Data.GetSingle(frameofs + 60) }
                             };
+                            
+                            if (joints[jntnum].ParentNum == -1)
+                            {
+                                transform = MultiplyMatrix(transform, roottransform);
+                            }
+
                             if (frameno == 0)
                             {
                                 joints[jntnum].InitialPose = transform;
                             }
+
                             anim.Frames.Add(transform);
                         }
                         Animations[joints[jntnum].Name] = anim;
