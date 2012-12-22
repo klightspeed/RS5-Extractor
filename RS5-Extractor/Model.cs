@@ -223,7 +223,7 @@ namespace RS5_Extractor
 
         public void SaveAnimated()
         {
-            Save(ColladaAnimatedFilename, false, true);
+            Save(ColladaAnimatedFilename, true, true);
         }
 
         protected float[,] InvertTransformMatrix(float[,] matrix)
