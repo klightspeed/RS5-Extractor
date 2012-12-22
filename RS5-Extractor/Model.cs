@@ -663,10 +663,12 @@ namespace RS5_Extractor
             {
                 writer.WriteWhitespace("\n");
                 writer.WriteString(String.Format("{0,12:F6} {1,12:F6} {2,12:F6} ", vertex.Position.X, vertex.Position.Y, vertex.Position.Z));
+                /*
                 if (vertex.ExtraData != null)
                 {
                     writer.WriteComment(String.Join(" ", vertex.ExtraData.Select(b => String.Format("{0:X2}", b))));
                 }
+                 */
             }
             writer.WriteWhitespace("\n");
             writer.WriteEndElement(); // float_array
