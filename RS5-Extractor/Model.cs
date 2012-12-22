@@ -1105,31 +1105,22 @@ namespace RS5_Extractor
                 foreach (KeyValuePair<string, Dictionary<string, Texture>> texlist_kvp in texlists)
                 {
                     string geometryname = texlist_kvp.Key;
-                    writer.WriteStartElement("node");
-                    writer.WriteAttributeString("id", geometryname + "_node_link");
                     writer.WriteStartElement("instance_node");
                     writer.WriteAttributeString("url", "#" + geometryname + "_node");
                     writer.WriteEndElement(); // instance_node
-                    writer.WriteEndElement(); // node
                 }
                 writer.WriteEndElement(); // node
 
                 writer.WriteStartElement("node");
                 writer.WriteAttributeString("id", "model");
-                writer.WriteStartElement("node");
-                writer.WriteAttributeString("id", "model_root_link");
                 writer.WriteStartElement("instance_node");
                 writer.WriteAttributeString("url", "#model_root");
                 writer.WriteEndElement(); // instance_node
-                writer.WriteEndElement(); // node
                 if (skeletonname != null)
                 {
-                    writer.WriteStartElement("node");
-                    writer.WriteAttributeString("id", "model_skel_link");
                     writer.WriteStartElement("instance_node");
                     writer.WriteAttributeString("url", "#" + skeletonname);
                     writer.WriteEndElement(); // instance_node
-                    writer.WriteEndElement(); // node
                 }
                 writer.WriteEndElement(); // node
                 writer.WriteEndElement(); // library_nodes
