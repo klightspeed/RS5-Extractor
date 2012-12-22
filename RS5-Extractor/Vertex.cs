@@ -11,9 +11,11 @@ namespace RS5_Extractor
         public int Index;
         public Point3D Position;
         public TextureCoordinate TexCoord;
-        public Color Diffuse;
         public Texture Texture;
         public JointInfluence[] JointInfluence;
+        public Point3D Normal;
+        public Point3D Tangent;
+        public Point3D Binormal;
         public byte[] ExtraData;
     }
 }

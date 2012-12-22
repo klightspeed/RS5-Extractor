@@ -119,12 +119,52 @@ namespace RS5_Extractor
                 return Animations.Count != 0;
             }
         }
-        
-        public string ColladaMultimeshFilename
+
+        public bool HasMultipleTextures
         {
             get
             {
-                return ".\\" + Name + ".multimesh.dae";
+                return Textures.Count() > 1;
+            }
+        }
+
+        public bool HasGeometry
+        {
+            get
+            {
+                return Vertices.Count != 0;
+            }
+        }
+
+        public bool HasNormals
+        {
+            get
+            {
+                return HasGeometry && Vertices.First().Normal != null;
+            }
+        }
+
+        public bool HasTangents
+        {
+            get
+            {
+                return HasGeometry && Vertices.First().Tangent != null;
+            }
+        }
+
+        public bool HasBinormals
+        {
+            get
+            {
+                return HasGeometry && Vertices.First().Binormal != null;
+            }
+        }
+        
+        public string ColladaFusedFilename
+        {
+            get
+            {
+                return ".\\" + Name + ".fused.dae";
             }
         }
 
@@ -143,6 +183,14 @@ namespace RS5_Extractor
                 return ".\\" + Name + ".animated.dae";
             }
         }
+
+        protected string[] ExludeTexturePrefixes = new string[]
+        {
+            "TEX\\CX",
+            "TEX\\CCX",
+            "TEX\\LX",
+            "TEX\\SPECIAL"
+        };
 
         protected void Save(string filename, bool fused, bool animated)
         {
@@ -163,19 +211,19 @@ namespace RS5_Extractor
             File.SetLastWriteTimeUtc(filename, ModTime);
         }
 
-        public void SaveMultimesh()
+        public void SaveFused()
         {
-            Save(ColladaMultimeshFilename, false, false);
+            Save(ColladaFusedFilename, true, false);
         }
 
         public void Save()
         {
-            Save(ColladaFilename, true, false);
+            Save(ColladaFilename, false, false);
         }
 
         public void SaveAnimated()
         {
-            Save(ColladaAnimatedFilename, true, true);
+            Save(ColladaAnimatedFilename, false, true);
         }
 
         protected float[,] InvertTransformMatrix(float[,] matrix)
@@ -254,15 +302,15 @@ namespace RS5_Extractor
             foreach (KeyValuePair<string, AnimationSequence> sequence_kvp in sequences)
             {
                 string seqname = sequence_kvp.Key;
-                string seqid = animationname + "-" + seqname;
+                string seqid = animationname + "_" + seqname;
                 AnimationSequence sequence = sequence_kvp.Value;
                 writer.WriteStartElement("animation");
                 writer.WriteAttributeString("id", seqid);
                 writer.WriteAttributeString("name", seqname);
                 writer.WriteStartElement("source");
-                writer.WriteAttributeString("id", seqid + "-time");
+                writer.WriteAttributeString("id", seqid + "_time");
                 writer.WriteStartElement("float_array");
-                writer.WriteAttributeString("id", seqid + "-time-array");
+                writer.WriteAttributeString("id", seqid + "_time_array");
                 writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
                 for (int i = 0; i < sequence.Frames.Count; i++)
                 {
@@ -271,7 +319,7 @@ namespace RS5_Extractor
                 writer.WriteEndElement(); // float_array
                 writer.WriteStartElement("technique_common");
                 writer.WriteStartElement("accessor");
-                writer.WriteAttributeString("source", "#" + seqid + "-time-array");
+                writer.WriteAttributeString("source", "#" + seqid + "_time_array");
                 writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
                 writer.WriteAttributeString("stride", "1");
                 writer.WriteStartElement("param");
@@ -282,9 +330,9 @@ namespace RS5_Extractor
                 writer.WriteEndElement(); // technique_common
                 writer.WriteEndElement(); // source
                 writer.WriteStartElement("source");
-                writer.WriteAttributeString("id", seqid + "-out-xfrm");
+                writer.WriteAttributeString("id", seqid + "_out_xfrm");
                 writer.WriteStartElement("float_array");
-                writer.WriteAttributeString("id", seqid + "-out-xfrm-array");
+                writer.WriteAttributeString("id", seqid + "_out_xfrm_array");
                 writer.WriteAttributeString("count", (sequence.Frames.Count * 16).ToString());
                 for (int n = 0; n < sequence.Frames.Count; n++)
                 {
@@ -301,7 +349,7 @@ namespace RS5_Extractor
                 writer.WriteEndElement(); // float_array
                 writer.WriteStartElement("technique_common");
                 writer.WriteStartElement("accessor");
-                writer.WriteAttributeString("source", "#" + seqid + "-out-xfrm-array");
+                writer.WriteAttributeString("source", "#" + seqid + "_out_xfrm_array");
                 writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
                 writer.WriteAttributeString("stride", "16");
                 writer.WriteStartElement("param");
@@ -312,9 +360,9 @@ namespace RS5_Extractor
                 writer.WriteEndElement(); // technique_common
                 writer.WriteEndElement(); // source
                 writer.WriteStartElement("source");
-                writer.WriteAttributeString("id", seqid + "-interp");
+                writer.WriteAttributeString("id", seqid + "_interp");
                 writer.WriteStartElement("Name_array");
-                writer.WriteAttributeString("id", seqid + "-interp-array");
+                writer.WriteAttributeString("id", seqid + "_interp_array");
                 writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
                 for (int i = 0; i < sequence.Frames.Count; i++)
                 {
@@ -323,7 +371,7 @@ namespace RS5_Extractor
                 writer.WriteEndElement(); // Name_array
                 writer.WriteStartElement("technique_common");
                 writer.WriteStartElement("accessor");
-                writer.WriteAttributeString("source", "#" + seqid + "-interp-array");
+                writer.WriteAttributeString("source", "#" + seqid + "_interp_array");
                 writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
                 writer.WriteAttributeString("stride", "1");
                 writer.WriteStartElement("param");
@@ -334,23 +382,23 @@ namespace RS5_Extractor
                 writer.WriteEndElement(); // technique_common
                 writer.WriteEndElement(); // source
                 writer.WriteStartElement("sampler");
-                writer.WriteAttributeString("id", seqid + "-xfrm");
+                writer.WriteAttributeString("id", seqid + "_xfrm");
                 writer.WriteStartElement("input");
                 writer.WriteAttributeString("semantic", "INPUT");
-                writer.WriteAttributeString("source", "#" + seqid + "-time");
+                writer.WriteAttributeString("source", "#" + seqid + "_time");
                 writer.WriteEndElement(); // input
                 writer.WriteStartElement("input");
                 writer.WriteAttributeString("semantic", "OUTPUT");
-                writer.WriteAttributeString("source", "#" + seqid + "-out-xfrm");
+                writer.WriteAttributeString("source", "#" + seqid + "_out_xfrm");
                 writer.WriteEndElement(); // input
                 writer.WriteStartElement("input");
                 writer.WriteAttributeString("semantic", "INTERPOLATION");
-                writer.WriteAttributeString("source", "#" + seqid + "-interp");
+                writer.WriteAttributeString("source", "#" + seqid + "_interp");
                 writer.WriteEndElement(); // input
                 writer.WriteEndElement(); // sampler
                 writer.WriteStartElement("channel");
-                writer.WriteAttributeString("source", "#" + seqid + "-xfrm");
-                writer.WriteAttributeString("target", skeletonname + "-" + seqname + "/transform.MATRIX");
+                writer.WriteAttributeString("source", "#" + seqid + "_xfrm");
+                writer.WriteAttributeString("target", skeletonname + "_" + seqname + "/transform.MATRIX");
                 writer.WriteEndElement(); // channel
                 writer.WriteEndElement(); // animation
             }
@@ -366,18 +414,18 @@ namespace RS5_Extractor
             writer.WriteAttributeString("source", "#" + geometryname);
             writer.WriteElementString("bind_shape_matrix", "1 0 0 0  0 1 0 0  0 0 1 0  0 0 0 1");
             writer.WriteStartElement("source");
-            writer.WriteAttributeString("id", skinname + "-jnt");
+            writer.WriteAttributeString("id", skinname + "_jnt");
             writer.WriteStartElement("IDREF_array");
-            writer.WriteAttributeString("id", skinname + "-jnt-array");
+            writer.WriteAttributeString("id", skinname + "_jnt_array");
             writer.WriteAttributeString("count", joints.Count.ToString());
             foreach (Joint joint in joints)
             {
-                writer.WriteString(skeletonname + "-" + joint.Name + " ");
+                writer.WriteString(skeletonname + "_" + joint.Symbol + " ");
             }
             writer.WriteEndElement(); // Name_array
             writer.WriteStartElement("technique_common");
             writer.WriteStartElement("accessor");
-            writer.WriteAttributeString("source", "#" + skinname + "-jnt-array");
+            writer.WriteAttributeString("source", "#" + skinname + "_jnt_array");
             writer.WriteAttributeString("count", joints.Count.ToString());
             writer.WriteAttributeString("stride", "1");
             writer.WriteStartElement("param");
@@ -388,9 +436,9 @@ namespace RS5_Extractor
             writer.WriteEndElement(); // technique_common
             writer.WriteEndElement(); // source
             writer.WriteStartElement("source");
-            writer.WriteAttributeString("id", skinname + "-bnd");
+            writer.WriteAttributeString("id", skinname + "_bnd");
             writer.WriteStartElement("float_array");
-            writer.WriteAttributeString("id", skinname + "-bnd-array");
+            writer.WriteAttributeString("id", skinname + "_bnd_array");
             writer.WriteAttributeString("count", (joints.Count * 16).ToString());
             foreach (Joint joint in joints)
             {
@@ -407,7 +455,7 @@ namespace RS5_Extractor
             writer.WriteEndElement(); // float_array
             writer.WriteStartElement("technique_common");
             writer.WriteStartElement("accessor");
-            writer.WriteAttributeString("source", "#" + skinname + "-bnd-array");
+            writer.WriteAttributeString("source", "#" + skinname + "_bnd_array");
             writer.WriteAttributeString("count", joints.Count.ToString());
             writer.WriteAttributeString("stride", "16");
             writer.WriteStartElement("param");
@@ -418,9 +466,9 @@ namespace RS5_Extractor
             writer.WriteEndElement(); // technique_common
             writer.WriteEndElement(); // source
             writer.WriteStartElement("source");
-            writer.WriteAttributeString("id", skinname + "-wgt");
+            writer.WriteAttributeString("id", skinname + "_wgt");
             writer.WriteStartElement("float_array");
-            writer.WriteAttributeString("id", skinname + "-wgt-array");
+            writer.WriteAttributeString("id", skinname + "_wgt_array");
             writer.WriteAttributeString("count", "256");
             for (int i = 0; i < 256; i++)
             {
@@ -429,7 +477,7 @@ namespace RS5_Extractor
             writer.WriteEndElement(); //float_array
             writer.WriteStartElement("technique_common");
             writer.WriteStartElement("accessor");
-            writer.WriteAttributeString("source", "#" + skinname + "-wgt-array");
+            writer.WriteAttributeString("source", "#" + skinname + "_wgt_array");
             writer.WriteAttributeString("count", "256");
             writer.WriteAttributeString("stride", "1");
             writer.WriteStartElement("param");
@@ -442,11 +490,11 @@ namespace RS5_Extractor
             writer.WriteStartElement("joints");
             writer.WriteStartElement("input");
             writer.WriteAttributeString("semantic", "JOINT");
-            writer.WriteAttributeString("source", "#" + skinname + "-jnt");
+            writer.WriteAttributeString("source", "#" + skinname + "_jnt");
             writer.WriteEndElement(); // input
             writer.WriteStartElement("input");
             writer.WriteAttributeString("semantic", "INV_BIND_MATRIX");
-            writer.WriteAttributeString("source", "#" + skinname + "-bnd");
+            writer.WriteAttributeString("source", "#" + skinname + "_bnd");
             writer.WriteEndElement(); // input
             writer.WriteEndElement(); // joints
             writer.WriteStartElement("vertex_weights");
@@ -454,12 +502,12 @@ namespace RS5_Extractor
             writer.WriteStartElement("input");
             writer.WriteAttributeString("offset", "0");
             writer.WriteAttributeString("semantic", "JOINT");
-            writer.WriteAttributeString("source", "#" + skinname + "-jnt");
+            writer.WriteAttributeString("source", "#" + skinname + "_jnt");
             writer.WriteEndElement(); // input
             writer.WriteStartElement("input");
             writer.WriteAttributeString("offset", "1");
             writer.WriteAttributeString("semantic", "WEIGHT");
-            writer.WriteAttributeString("source", "#" + skinname + "-wgt");
+            writer.WriteAttributeString("source", "#" + skinname + "_wgt");
             writer.WriteEndElement(); // input
             writer.WriteStartElement("vcount");
             foreach (Vertex vertex in vertices)
@@ -508,7 +556,7 @@ namespace RS5_Extractor
             }
 
             writer.WriteStartElement("node");
-            writer.WriteAttributeString("id", skeletonname + "-" + joint.Name);
+            writer.WriteAttributeString("id", skeletonname + "_" + joint.Symbol);
             writer.WriteAttributeString("name", joint.Name);
             writer.WriteAttributeString("sid", joint.Name);
             writer.WriteAttributeString("type", "JOINT");
@@ -531,6 +579,7 @@ namespace RS5_Extractor
 
         protected void WriteColladaXmlGeometryInstance(XmlWriter writer, string modelname, string geometryname, string skinname, string skeletonname, Dictionary<string, Texture> textures)
         {
+            bool visible = false;
             writer.WriteStartElement("node");
             writer.WriteAttributeString("id", modelname);
             if (skeletonname != null)
@@ -549,11 +598,12 @@ namespace RS5_Extractor
             {
                 string texname = texture_kvp.Key;
                 Texture texture = texture_kvp.Value;
+                visible |= ExludeTexturePrefixes.Count(v => texture.Name.StartsWith(v)) == 0;
                 writer.WriteStartElement("bind_material");
                 writer.WriteStartElement("technique_common");
                 writer.WriteStartElement("instance_material");
-                writer.WriteAttributeString("symbol", String.Format("{0}-lnk", texname));
-                writer.WriteAttributeString("target", String.Format("#{0}-mtl", texname));
+                writer.WriteAttributeString("symbol", texname + "_lnk");
+                writer.WriteAttributeString("target", "#" + texname + "_mtl");
                 writer.WriteStartElement("bind_vertex_input");
                 writer.WriteAttributeString("semantic", "TEXCOORD");
                 writer.WriteAttributeString("input_semantic", "TEXCOORD");
@@ -563,8 +613,24 @@ namespace RS5_Extractor
                 writer.WriteEndElement(); // technique_common
                 writer.WriteEndElement(); // bind_material
                 texnum++;
+
             }
             writer.WriteEndElement(); // instance_geometry|instance_controller
+            writer.WriteStartElement("extra");
+            writer.WriteStartElement("technique");
+            writer.WriteAttributeString("profile", "FCOLLADA");
+            writer.WriteElementString("visibility", visible ? "1" : "0");
+            writer.WriteEndElement(); // technique
+            writer.WriteStartElement("technique");
+            writer.WriteAttributeString("profile", "XSI");
+            writer.WriteStartElement("SI_Visibility");
+            writer.WriteStartElement("xsi_param");
+            writer.WriteAttributeString("sid", "visibility");
+            writer.WriteString(visible ? "TRUE" : "FALSE");
+            writer.WriteEndElement(); // xsi_param
+            writer.WriteEndElement(); // SI_Visibility
+            writer.WriteEndElement(); // technique
+            writer.WriteEndElement(); // extra
             writer.WriteEndElement(); // node
         }
         
@@ -588,9 +654,9 @@ namespace RS5_Extractor
             writer.WriteAttributeString("id", geometryname);
             writer.WriteStartElement("mesh");
             writer.WriteStartElement("source");
-            writer.WriteAttributeString("id", String.Format("{0}-pos", geometryname));
+            writer.WriteAttributeString("id", geometryname + "_pos");
             writer.WriteStartElement("float_array");
-            writer.WriteAttributeString("id", String.Format("{0}-pos-array", geometryname));
+            writer.WriteAttributeString("id", geometryname + "_pos_array");
 
             writer.WriteAttributeString("count", (vertices.Count * 3).ToString());
             foreach (Vertex vertex in vertices)
@@ -608,7 +674,7 @@ namespace RS5_Extractor
             writer.WriteStartElement("accessor");
             writer.WriteAttributeString("count", vertices.Count.ToString());
             writer.WriteAttributeString("offset", "0");
-            writer.WriteAttributeString("source", String.Format("#{0}-pos-array", geometryname));
+            writer.WriteAttributeString("source", "#" + geometryname + "_pos_array");
             writer.WriteAttributeString("stride", "3");
             writer.WriteStartElement("param");
             writer.WriteAttributeString("name", "X");
@@ -626,9 +692,9 @@ namespace RS5_Extractor
             writer.WriteEndElement(); // technique_common
             writer.WriteEndElement(); // source
             writer.WriteStartElement("source");
-            writer.WriteAttributeString("id", String.Format("{0}-tex", geometryname));
+            writer.WriteAttributeString("id", geometryname + "_tex");
             writer.WriteStartElement("float_array");
-            writer.WriteAttributeString("id", String.Format("{0}-tex-array", geometryname));
+            writer.WriteAttributeString("id", geometryname + "_tex_array");
             writer.WriteAttributeString("count", (vertices.Count * 2).ToString());
             foreach (Vertex vertex in vertices)
             {
@@ -641,7 +707,7 @@ namespace RS5_Extractor
             writer.WriteStartElement("accessor");
             writer.WriteAttributeString("count", vertices.Count.ToString());
             writer.WriteAttributeString("offset", "0");
-            writer.WriteAttributeString("source", String.Format("#{0}-tex-array", geometryname));
+            writer.WriteAttributeString("source", "#" + geometryname + "_tex_array");
             writer.WriteAttributeString("stride", "2");
             writer.WriteStartElement("param");
             writer.WriteAttributeString("name", "S");
@@ -654,45 +720,141 @@ namespace RS5_Extractor
             writer.WriteEndElement(); // accessor
             writer.WriteEndElement(); // technique_common
             writer.WriteEndElement(); // source
-            writer.WriteStartElement("source");
-            writer.WriteAttributeString("id", String.Format("{0}-rgb", geometryname));
-            writer.WriteStartElement("float_array");
-            writer.WriteAttributeString("id", String.Format("{0}-rgb-array", geometryname));
-            writer.WriteAttributeString("count", (vertices.Count * 3).ToString());
-            foreach (Vertex vertex in vertices)
+            if (HasNormals)
             {
+                writer.WriteStartElement("source");
+                writer.WriteAttributeString("id", geometryname + "_normal");
+                writer.WriteStartElement("float_array");
+                writer.WriteAttributeString("id", geometryname + "_normal_array");
+                writer.WriteAttributeString("count", (vertices.Count * 3).ToString());
+                foreach (Vertex vertex in vertices)
+                {
+                    writer.WriteWhitespace("\n");
+                    writer.WriteString(String.Format("{0:F3} {1:F3} {2:F3}", vertex.Normal.X, vertex.Normal.Y, vertex.Normal.Z));
+                }
                 writer.WriteWhitespace("\n");
-                writer.WriteString(String.Format("{0:F3} {1:F3} {2:F3}", vertex.Diffuse.R / 255.0, vertex.Diffuse.G / 255.0, vertex.Diffuse.B / 255.0));
+                writer.WriteEndElement(); // float_array
+                writer.WriteStartElement("technique_common");
+                writer.WriteStartElement("accessor");
+                writer.WriteAttributeString("count", vertices.Count.ToString());
+                writer.WriteAttributeString("offset", "0");
+                writer.WriteAttributeString("source", "#" + geometryname + "_normal_array");
+                writer.WriteAttributeString("stride", "3");
+                writer.WriteStartElement("param");
+                writer.WriteAttributeString("name", "X");
+                writer.WriteAttributeString("type", "float");
+                writer.WriteEndElement(); // param
+                writer.WriteStartElement("param");
+                writer.WriteAttributeString("name", "Y");
+                writer.WriteAttributeString("type", "float");
+                writer.WriteEndElement(); // param
+                writer.WriteStartElement("param");
+                writer.WriteAttributeString("name", "Z");
+                writer.WriteAttributeString("type", "float");
+                writer.WriteEndElement(); // param
+                writer.WriteEndElement(); // accessor
+                writer.WriteEndElement(); // technique_common
+                writer.WriteEndElement(); // source
             }
-            writer.WriteWhitespace("\n");
-            writer.WriteEndElement(); // float_array
-            writer.WriteStartElement("technique_common");
-            writer.WriteStartElement("accessor");
-            writer.WriteAttributeString("count", vertices.Count.ToString());
-            writer.WriteAttributeString("offset", "0");
-            writer.WriteAttributeString("source", String.Format("#{0}-rgb-array", geometryname));
-            writer.WriteAttributeString("stride", "3");
-            writer.WriteStartElement("param");
-            writer.WriteAttributeString("name", "R");
-            writer.WriteAttributeString("type", "float");
-            writer.WriteEndElement(); // param
-            writer.WriteStartElement("param");
-            writer.WriteAttributeString("name", "G");
-            writer.WriteAttributeString("type", "float");
-            writer.WriteEndElement(); // param
-            writer.WriteStartElement("param");
-            writer.WriteAttributeString("name", "B");
-            writer.WriteAttributeString("type", "float");
-            writer.WriteEndElement(); // param
-            writer.WriteEndElement(); // accessor
-            writer.WriteEndElement(); // technique_common
-            writer.WriteEndElement(); // source
+            if (HasTangents)
+            {
+                writer.WriteStartElement("source");
+                writer.WriteAttributeString("id", geometryname + "_tangent");
+                writer.WriteStartElement("float_array");
+                writer.WriteAttributeString("id", geometryname + "_tangent_array");
+                writer.WriteAttributeString("count", (vertices.Count * 3).ToString());
+                foreach (Vertex vertex in vertices)
+                {
+                    writer.WriteWhitespace("\n");
+                    writer.WriteString(String.Format("{0:F3} {1:F3} {2:F3}", vertex.Tangent.X, vertex.Tangent.Y, vertex.Tangent.Z));
+                }
+                writer.WriteWhitespace("\n");
+                writer.WriteEndElement(); // float_array
+                writer.WriteStartElement("technique_common");
+                writer.WriteStartElement("accessor");
+                writer.WriteAttributeString("count", vertices.Count.ToString());
+                writer.WriteAttributeString("offset", "0");
+                writer.WriteAttributeString("source", "#" + geometryname + "_tangent_array");
+                writer.WriteAttributeString("stride", "3");
+                writer.WriteStartElement("param");
+                writer.WriteAttributeString("name", "X");
+                writer.WriteAttributeString("type", "float");
+                writer.WriteEndElement(); // param
+                writer.WriteStartElement("param");
+                writer.WriteAttributeString("name", "Y");
+                writer.WriteAttributeString("type", "float");
+                writer.WriteEndElement(); // param
+                writer.WriteStartElement("param");
+                writer.WriteAttributeString("name", "Z");
+                writer.WriteAttributeString("type", "float");
+                writer.WriteEndElement(); // param
+                writer.WriteEndElement(); // accessor
+                writer.WriteEndElement(); // technique_common
+                writer.WriteEndElement(); // source
+            }
+            if (HasBinormals)
+            {
+                writer.WriteStartElement("source");
+                writer.WriteAttributeString("id", geometryname + "_binormal");
+                writer.WriteStartElement("float_array");
+                writer.WriteAttributeString("id", geometryname + "_binormal_array");
+                writer.WriteAttributeString("count", (vertices.Count * 3).ToString());
+                foreach (Vertex vertex in vertices)
+                {
+                    writer.WriteWhitespace("\n");
+                    writer.WriteString(String.Format("{0:F3} {1:F3} {2:F3}", vertex.Tangent.X, vertex.Tangent.Y, vertex.Tangent.Z));
+                }
+                writer.WriteWhitespace("\n");
+                writer.WriteEndElement(); // float_array
+                writer.WriteStartElement("technique_common");
+                writer.WriteStartElement("accessor");
+                writer.WriteAttributeString("count", vertices.Count.ToString());
+                writer.WriteAttributeString("offset", "0");
+                writer.WriteAttributeString("source", "#" + geometryname + "_binormal_array");
+                writer.WriteAttributeString("stride", "3");
+                writer.WriteStartElement("param");
+                writer.WriteAttributeString("name", "X");
+                writer.WriteAttributeString("type", "float");
+                writer.WriteEndElement(); // param
+                writer.WriteStartElement("param");
+                writer.WriteAttributeString("name", "Y");
+                writer.WriteAttributeString("type", "float");
+                writer.WriteEndElement(); // param
+                writer.WriteStartElement("param");
+                writer.WriteAttributeString("name", "Z");
+                writer.WriteAttributeString("type", "float");
+                writer.WriteEndElement(); // param
+                writer.WriteEndElement(); // accessor
+                writer.WriteEndElement(); // technique_common
+                writer.WriteEndElement(); // source
+            }
             writer.WriteStartElement("vertices");
-            writer.WriteAttributeString("id", String.Format("{0}-vtx", geometryname));
+            writer.WriteAttributeString("id", geometryname + "_vtx");
             writer.WriteStartElement("input");
             writer.WriteAttributeString("semantic", "POSITION");
-            writer.WriteAttributeString("source", String.Format("#{0}-pos", geometryname));
+            writer.WriteAttributeString("source", "#" + geometryname + "_pos");
             writer.WriteEndElement(); // input
+            if (HasNormals)
+            {
+                writer.WriteStartElement("input");
+                writer.WriteAttributeString("semantic", "NORMAL");
+                writer.WriteAttributeString("source", "#" + geometryname + "_normal");
+                writer.WriteEndElement(); // input
+            }
+            if (HasTangents)
+            {
+                writer.WriteStartElement("input");
+                writer.WriteAttributeString("semantic", "TANGENT");
+                writer.WriteAttributeString("source", "#" + geometryname + "_tangent");
+                writer.WriteEndElement(); // input
+            }
+            if (HasBinormals)
+            {
+                writer.WriteStartElement("input");
+                writer.WriteAttributeString("semantic", "BINORMAL");
+                writer.WriteAttributeString("source", "#" + geometryname + "_binormal");
+                writer.WriteEndElement(); // input
+            }
             writer.WriteEndElement(); // vertices
             int texnum = 0;
             foreach (KeyValuePair<string, Texture> texture_kvp in textures)
@@ -703,23 +865,18 @@ namespace RS5_Extractor
                 writer.WriteAttributeString("count", triangles.Count.ToString());
                 if (texture != null)
                 {
-                    writer.WriteAttributeString("material", String.Format("{0}-lnk", texname));
+                    writer.WriteAttributeString("material", texname + "_lnk");
                 }
                 writer.WriteStartElement("input");
                 writer.WriteAttributeString("offset", "0");
                 writer.WriteAttributeString("semantic", "VERTEX");
-                writer.WriteAttributeString("source", String.Format("#{0}-vtx", geometryname));
+                writer.WriteAttributeString("source", "#" + geometryname + "_vtx");
                 writer.WriteEndElement(); // input
                 writer.WriteStartElement("input");
                 writer.WriteAttributeString("offset", "1");
                 writer.WriteAttributeString("semantic", "TEXCOORD");
-                writer.WriteAttributeString("source", String.Format("#{0}-tex", geometryname));
+                writer.WriteAttributeString("source", "#" + geometryname + "_tex");
                 writer.WriteAttributeString("set", String.Format("{0}", texnum));
-                writer.WriteEndElement(); // input
-                writer.WriteStartElement("input");
-                writer.WriteAttributeString("offset", "2");
-                writer.WriteAttributeString("semantic", "COLOR");
-                writer.WriteAttributeString("source", String.Format("#{0}-rgb", geometryname));
                 writer.WriteEndElement(); // input
                 writer.WriteStartElement("p");
                 foreach (Triangle triangle in triangles.Where(t => t.Texture == texture))
@@ -727,7 +884,7 @@ namespace RS5_Extractor
                     writer.WriteWhitespace("\n");
                     foreach (int idx in new int[] { triangle.A.Index, triangle.B.Index, triangle.C.Index })
                     {
-                        writer.WriteString(String.Format("{0} {0} {0}  ", idx));
+                        writer.WriteString(String.Format("{0} {0}  ", idx));
                     }
                 }
                 writer.WriteWhitespace("\n");
@@ -736,6 +893,12 @@ namespace RS5_Extractor
                 texnum++;
             }
             writer.WriteEndElement(); // mesh
+            writer.WriteStartElement("extra");
+            writer.WriteStartElement("technique");
+            writer.WriteAttributeString("profile", "MAYA");
+            writer.WriteElementString("double_sided", "1");
+            writer.WriteEndElement(); // technique
+            writer.WriteEndElement(); // extra
             writer.WriteEndElement(); // geometry
 
             return vertices;
@@ -751,6 +914,10 @@ namespace RS5_Extractor
             writer.WriteEndElement(); // contributor
             writer.WriteElementString("created", ModTime.ToString("O"));
             writer.WriteElementString("modified", ModTime.ToString("O"));
+            writer.WriteStartElement("unit");
+            writer.WriteAttributeString("meter", "1.0");
+            writer.WriteAttributeString("name", "meter");
+            writer.WriteEndElement(); // unit
             writer.WriteElementString("up_axis", "Z_UP");
             writer.WriteEndElement(); // asset
             writer.WriteStartElement("library_images");
@@ -759,8 +926,8 @@ namespace RS5_Extractor
                 string texname = texture_kvp.Key;
                 Texture texture = texture_kvp.Value;
                 writer.WriteStartElement("image");
-                writer.WriteAttributeString("id", String.Format("{0}-img", texname));
-                writer.WriteAttributeString("name", String.Format("{0}-img", texname));
+                writer.WriteAttributeString("id", texname + "_img");
+                writer.WriteAttributeString("name", texname + "_img");
                 writer.WriteAttributeString("depth", "1");
                 writer.WriteElementString("init_from", String.Join("", this.Name.Where(c => c == '\\').Select(c => "../")) + texture.PNGFilename.Replace('\\', '/'));
                 writer.WriteEndElement(); // image
@@ -772,20 +939,20 @@ namespace RS5_Extractor
                 string texname = texture_kvp.Key;
                 Texture texture = texture_kvp.Value;
                 writer.WriteStartElement("effect");
-                writer.WriteAttributeString("id", String.Format("{0}-fx", texname));
+                writer.WriteAttributeString("id", texname + "_fx");
                 writer.WriteStartElement("profile_COMMON");
                 writer.WriteStartElement("newparam");
-                writer.WriteAttributeString("sid", String.Format("{0}-sfc", texname));
+                writer.WriteAttributeString("sid", texname + "_sfc");
                 writer.WriteStartElement("surface");
                 writer.WriteAttributeString("type", "2D");
-                writer.WriteElementString("init_from", String.Format("{0}-img", texname));
+                writer.WriteElementString("init_from", texname + "_img");
                 writer.WriteElementString("format", "A8R8G8B8");
                 writer.WriteEndElement(); // surface
                 writer.WriteEndElement(); // newparam
                 writer.WriteStartElement("newparam");
-                writer.WriteAttributeString("sid", String.Format("{0}-smp", texname));
+                writer.WriteAttributeString("sid", texname + "_smp");
                 writer.WriteStartElement("sampler2D");
-                writer.WriteElementString("source", String.Format("{0}-sfc", texname));
+                writer.WriteElementString("source", texname + "_sfc");
                 writer.WriteElementString("minfilter", "LINEAR_MIPMAP_LINEAR");
                 writer.WriteElementString("magfilter", "LINEAR");
                 writer.WriteEndElement(); // sampler2D
@@ -801,7 +968,7 @@ namespace RS5_Extractor
                 writer.WriteEndElement(); // ambient
                 writer.WriteStartElement("diffuse");
                 writer.WriteStartElement("texture");
-                writer.WriteAttributeString("texture", String.Format("{0}-smp", texname));
+                writer.WriteAttributeString("texture", texname + "_smp");
                 writer.WriteAttributeString("texcoord", "TEXCOORD");
                 writer.WriteEndElement(); // texture
                 writer.WriteEndElement(); // diffuse
@@ -820,7 +987,7 @@ namespace RS5_Extractor
                 writer.WriteStartElement("transparent");
                 writer.WriteAttributeString("opaque", "A_ONE");
                 writer.WriteStartElement("texture");
-                writer.WriteAttributeString("texture", String.Format("{0}-smp", texname));
+                writer.WriteAttributeString("texture", texname + "_smp");
                 writer.WriteAttributeString("texcoord", "TEXCOORD");
                 writer.WriteEndElement(); // texture
                 writer.WriteEndElement(); // transparent
@@ -831,8 +998,24 @@ namespace RS5_Extractor
                 writer.WriteElementString("float", "1.0");
                 writer.WriteEndElement(); // index_of_refraction
                 writer.WriteEndElement(); // blinn
+                writer.WriteStartElement("extra");
+                writer.WriteStartElement("technique");
+                writer.WriteAttributeString("profile", "GOOGLEEARTH");
+                writer.WriteElementString("double_sided", "1");
+                writer.WriteEndElement(); // technique
+                writer.WriteStartElement("technique");
+                writer.WriteAttributeString("profile", "OKINO");
+                writer.WriteElementString("double_sided", "1");
+                writer.WriteEndElement(); // technique
+                writer.WriteEndElement(); // extra
                 writer.WriteEndElement(); // technique
                 writer.WriteEndElement(); // profile_COMMON
+                writer.WriteStartElement("extra");
+                writer.WriteStartElement("technique");
+                writer.WriteAttributeString("profile", "MAX3D");
+                writer.WriteElementString("double_sided", "1");
+                writer.WriteEndElement(); // technique
+                writer.WriteEndElement(); // extra
                 writer.WriteEndElement(); // effect
             }
             writer.WriteEndElement(); // library_effects
@@ -842,78 +1025,148 @@ namespace RS5_Extractor
                 string texname = texture_kvp.Key;
                 Texture texture = texture_kvp.Value;
                 writer.WriteStartElement("material");
-                writer.WriteAttributeString("id", String.Format("{0}-mtl", texname));
+                writer.WriteAttributeString("id", texname + "_mtl");
                 writer.WriteStartElement("instance_effect");
-                writer.WriteAttributeString("url", String.Format("#{0}-fx", texname));
+                writer.WriteAttributeString("url", "#" + texname + "_fx");
                 writer.WriteEndElement(); // instance_effect
                 writer.WriteEndElement(); // material
             }
             writer.WriteEndElement(); // library_materials
 
+            Dictionary<string, List<Vertex>> vtxlists = new Dictionary<string,List<Vertex>>();
+            Dictionary<string, Dictionary<string, Texture>> texlists = new Dictionary<string, Dictionary<string, Texture>>();
+            writer.WriteStartElement("library_geometries");
             if (fused)
             {
-                writer.WriteStartElement("library_geometries");
-                List<Vertex> vertices = WriteColladaXmlGeometry(writer, "model-mesh", Triangles, Textures);
-                writer.WriteEndElement(); // library_geometries
-                if (Joints.Count != 0)
-                {
-                    List<Joint> joints = Joints.Values.ToList();
-                    writer.WriteStartElement("library_controllers");
-                    WriteColladaXmlJointsSkin(writer, "model-mesh", "model-skel", "model-skin", vertices, joints);
-                    writer.WriteEndElement(); // library_controllers
-                    if (Animations.Count != 0 && animate)
-                    {
-                        writer.WriteStartElement("library_animations");
-                        WriteColladaXmlAnimation(writer, "model-anim", "model-skel", Animations);
-                        writer.WriteEndElement(); // library_animations
-                    }
-                }
+                Dictionary<string, Texture> texlist = Textures.Where(kvp => ExludeTexturePrefixes.Count(v => kvp.Value.Name.StartsWith(v)) == 0).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                List<Triangle> triangles = Triangles.Where(t => texlist.Values.Contains(t.Texture)).ToList();
+                texlists["model_mesh"] = texlist;
+                vtxlists["model_mesh"] = WriteColladaXmlGeometry(writer, "model_mesh", triangles, texlist);
             }
             else
             {
-                writer.WriteStartElement("library_geometries");
                 int modelnum = 0;
                 foreach (KeyValuePair<string, Texture> texture_kvp in Textures)
                 {
                     string texname = texture_kvp.Key;
                     Texture texture = texture_kvp.Value;
-                    WriteColladaXmlGeometry(writer, String.Format("model{0}-mesh", modelnum), Triangles.Where(t => t.Texture == texture).ToList(), new Dictionary<string, Texture> { { texname, texture } });
+                    string geometryname = String.Format("model{0}_mesh", modelnum);
+                    Dictionary<string, Texture> texlist = new Dictionary<string, Texture> { { texname, texture } };
+                    List<Triangle> triangles = Triangles.Where(t => t.Texture == texture).ToList();
+                    texlists[geometryname] = texlist;
+                    vtxlists[geometryname] = WriteColladaXmlGeometry(writer, geometryname, triangles, texlist);
                     modelnum++;
                 }
-                writer.WriteEndElement(); // library_geometries
             }
+            writer.WriteEndElement(); // library_geometries
 
+            if (Joints.Count != 0)
+            {
+                List<Joint> joints = Joints.Values.ToList();
+                writer.WriteStartElement("library_controllers");
+                foreach (KeyValuePair<string, List<Vertex>> vtxlist_kvp in vtxlists)
+                {
+                    string geometryname = vtxlist_kvp.Key;
+                    string skinname = geometryname + "_skin";
+                    List<Vertex> vertices = vtxlist_kvp.Value;
+                    WriteColladaXmlJointsSkin(writer, geometryname, "model_skel", skinname, vertices, joints);
+                }
+                writer.WriteEndElement(); // library_controllers
+                if (Animations.Count != 0 && animate)
+                {
+                    writer.WriteStartElement("library_animations");
+                    WriteColladaXmlAnimation(writer, "model_anim", "model_skel", Animations);
+                    writer.WriteEndElement(); // library_animations
+                }
+            }
+            if (!fused)
+            {
+                writer.WriteStartElement("library_nodes");
+                string skeletonname = null;
+                bool hasskin = false;
+                if (RootJoint != null)
+                {
+                    skeletonname = "model_skel";
+                    hasskin = true;
+                    WriteColladaXmlSkeleton(writer, skeletonname, RootJoint, null);
+                }
+
+                foreach (KeyValuePair<string, Dictionary<string, Texture>> texlist_kvp in texlists)
+                {
+                    string geometryname = texlist_kvp.Key;
+                    Dictionary<string, Texture> texlist = texlist_kvp.Value;
+                    WriteColladaXmlGeometryInstance(writer, geometryname + "_node", geometryname, hasskin ? geometryname + "_skin" : null, skeletonname, texlist);
+                }
+
+                writer.WriteStartElement("node");
+                writer.WriteAttributeString("id", "model_root");
+                foreach (KeyValuePair<string, Dictionary<string, Texture>> texlist_kvp in texlists)
+                {
+                    string geometryname = texlist_kvp.Key;
+                    writer.WriteStartElement("node");
+                    writer.WriteAttributeString("id", geometryname + "_node_link");
+                    writer.WriteStartElement("instance_node");
+                    writer.WriteAttributeString("url", "#" + geometryname + "_node");
+                    writer.WriteEndElement(); // instance_node
+                    writer.WriteEndElement(); // node
+                }
+                writer.WriteEndElement(); // node
+
+                writer.WriteStartElement("node");
+                writer.WriteAttributeString("id", "model");
+                writer.WriteStartElement("node");
+                writer.WriteAttributeString("id", "model_root_link");
+                writer.WriteStartElement("instance_node");
+                writer.WriteAttributeString("url", "#model_root");
+                writer.WriteEndElement(); // instance_node
+                writer.WriteEndElement(); // node
+                if (skeletonname != null)
+                {
+                    writer.WriteStartElement("node");
+                    writer.WriteAttributeString("id", "model_skel_link");
+                    writer.WriteStartElement("instance_node");
+                    writer.WriteAttributeString("url", "#" + skeletonname);
+                    writer.WriteEndElement(); // instance_node
+                    writer.WriteEndElement(); // node
+                }
+                writer.WriteEndElement(); // node
+                writer.WriteEndElement(); // library_nodes
+            }
             writer.WriteStartElement("library_visual_scenes");
             writer.WriteStartElement("visual_scene");
-            writer.WriteAttributeString("id", "visual-scene");
+            writer.WriteAttributeString("id", "visual_scene");
             if (fused)
             {
                 string skeletonname = null;
-                string skinname = null;
+                bool hasskin = false;
                 if (RootJoint != null)
                 {
-                    skeletonname = "model-skel";
-                    skinname = "model-skin";
+                    skeletonname = "model_skel";
+                    hasskin = true;
                     WriteColladaXmlSkeleton(writer, skeletonname, RootJoint, null);
                 }
-                WriteColladaXmlGeometryInstance(writer, "model", "model-mesh", skinname, skeletonname, Textures);
+
+                foreach (KeyValuePair<string, Dictionary<string, Texture>> texlist_kvp in texlists)
+                {
+                    string geometryname = texlist_kvp.Key;
+                    Dictionary<string, Texture> texlist = texlist_kvp.Value;
+                    WriteColladaXmlGeometryInstance(writer, geometryname + "_node", geometryname, hasskin ? geometryname + "_skin" : null, skeletonname, texlist);
+                }
             }
             else
             {
-                int modelnum = 0;
-                foreach (KeyValuePair<string, Texture> texture_kvp in Textures)
-                {
-                    string texname = texture_kvp.Key;
-                    Texture texture = texture_kvp.Value;
-                    WriteColladaXmlGeometryInstance(writer, String.Format("model{0}", modelnum), String.Format("model{0}-mesh", modelnum), null, null, new Dictionary<string, Texture> { { texname, texture } });
-                    modelnum++;
-                }
+                writer.WriteStartElement("node");
+                writer.WriteAttributeString("id", "model_visual");
+                writer.WriteStartElement("instance_node");
+                writer.WriteAttributeString("url", "#model");
+                writer.WriteEndElement(); // instance_node
+                writer.WriteEndElement(); // node
             }
             writer.WriteEndElement(); // visual_scene
             writer.WriteEndElement(); // library_visual_scenes
             writer.WriteStartElement("scene");
             writer.WriteStartElement("instance_visual_scene");
-            writer.WriteAttributeString("url", "#visual-scene");
+            writer.WriteAttributeString("url", "#visual_scene");
             writer.WriteEndElement(); // instance_visual_scene
             writer.WriteEndElement(); // scene
             writer.WriteEndElement(); // COLLADA
@@ -956,11 +1209,13 @@ namespace RS5_Extractor
                 int numtri = BHDR.Data.GetInt32(texofs + 140);
                 Texture texture = Texture.GetTexture(texname);
 
+                /*
                 if (!(texname.ToUpper().StartsWith("TEX\\CX") ||
                       texname.ToUpper().StartsWith("TEX\\LX") ||
                       texname.ToUpper().StartsWith("TEX\\SPECIAL") ||
                       texname.ToUpper().StartsWith("TEX\\CCX")))
                 {
+                 */
                     Textures.Add(texsym, texture);
 
                     int startvtx = Vertices.Count;
@@ -981,8 +1236,25 @@ namespace RS5_Extractor
                                 V = -VTXL.Data.GetSingle(vtxofs + 28),
                             },
                             Texture = texture,
-                            Diffuse = Color.FromArgb(VTXL.Data.GetInt32(vtxofs + 12)),
-                            ExtraData = VTXL.Data.GetBytes(vtxofs + 12, 12)
+                            Normal = new Point3D
+                            {
+                                X = -(VTXL.Data[vtxofs + 14] - 0x80) / 127.0F,
+                                Y = (VTXL.Data[vtxofs + 13] - 0x80) / 127.0F,
+                                Z = (VTXL.Data[vtxofs + 12] - 0x80) / 127.0F
+                            },
+                            Tangent = new Point3D
+                            {
+                                X = -(VTXL.Data[vtxofs + 18] - 0x80) / 127.0F,
+                                Y = (VTXL.Data[vtxofs + 17] - 0x80) / 127.0F,
+                                Z = (VTXL.Data[vtxofs + 16] - 0x80) / 127.0F
+                            },
+                            Binormal = new Point3D
+                            {
+                                X = -(VTXL.Data[vtxofs + 22] - 0x80) / 127.0F,
+                                Y = (VTXL.Data[vtxofs + 21] - 0x80) / 127.0F,
+                                Z = (VTXL.Data[vtxofs + 20] - 0x80) / 127.0F
+                            },
+                            ExtraData = VTXL.Data.GetBytes(vtxofs + 32, 4)
                         });
                     }
 
@@ -1000,7 +1272,7 @@ namespace RS5_Extractor
                             Texture = texture
                         });
                     }
-                }
+                //}
             }
         }
     }
@@ -1039,11 +1311,13 @@ namespace RS5_Extractor
                 int endtri = BLKS.Data.GetInt32(texofs + 140);
                 Texture texture = Texture.GetTexture(texname);
 
+                /*
                 if (!(texname.ToUpper().StartsWith("TEX\\CX") ||
                       texname.ToUpper().StartsWith("TEX\\LX") ||
                       texname.ToUpper().StartsWith("TEX\\SPECIAL") ||
                       texname.ToUpper().StartsWith("TEX\\CCX")))
                 {
+                 */
                     Textures.Add(texsym, texture);
 
                     int startvtx = Vertices.Count;
@@ -1063,7 +1337,12 @@ namespace RS5_Extractor
                                 U = VTXS.Data.GetSingle(vtxofs + 12),
                                 V = -VTXS.Data.GetSingle(vtxofs + 16)
                             },
-                            Diffuse = Color.FromArgb(VTXS.Data.GetInt32(vtxofs + 20)),
+                            Normal = new Point3D
+                            {
+                                X = (VTXS.Data[vtxofs + 22] - 0x80) / 127.0F,
+                                Z = (VTXS.Data[vtxofs + 21] - 0x80) / 127.0F,
+                                Y = -(VTXS.Data[vtxofs + 20] - 0x80) / 127.0F
+                            },
                             Texture = texture,
                             JointInfluence = (new int[] { 0, 1, 2, 3 }).Select(i => new JointInfluence { JointIndex = VTXS.Data[vtxofs + 24 + i], Influence = VTXS.Data[vtxofs + 28 + i] / 255.0F }).Where(j => j.Influence != 0).ToArray()
                         });
@@ -1083,7 +1362,7 @@ namespace RS5_Extractor
                             Texture = texture
                         });
                     }
-                }
+                //}
             }
 
             if (JNTS != null)
@@ -1092,6 +1371,7 @@ namespace RS5_Extractor
                 {
                     int jntofs = jntnum * 196;
                     int parent = JNTS.Data.GetInt32(jntofs + 192);
+                    string jntsym = String.Format("joint{0}", jntnum);
                     float[,] revbindmatrix = new float[4,4]
                     {
                         { JNTS.Data.GetSingle(jntofs + 128), JNTS.Data.GetSingle(jntofs + 144), JNTS.Data.GetSingle(jntofs + 160), JNTS.Data.GetSingle(jntofs + 176) },
@@ -1107,9 +1387,10 @@ namespace RS5_Extractor
                         Name = JNTS.Data.GetString(jntofs, 128),
                         ReverseBindingMatrix = revbindmatrix,
                         JointNum = jntnum,
-                        ParentNum = parent
+                        ParentNum = parent,
+                        Symbol = jntsym
                     };
-                    Joints.Add(joint.Name, joint);
+                    Joints.Add(jntsym, joint);
                 }
 
                 foreach (Joint joint in Joints.Values)
@@ -1152,7 +1433,7 @@ namespace RS5_Extractor
 
                             anim.Frames.Add(transform);
                         }
-                        Animations[joints[jntnum].Name] = anim;
+                        Animations[joints[jntnum].Symbol] = anim;
                     }
                 }
             }

@@ -7,6 +7,7 @@ namespace RS5_Extractor
 {
     public class Joint
     {
+        public string Symbol;
         public string Name;
         public float[,] ReverseBindingMatrix;
         public float[,] InitialPose;
