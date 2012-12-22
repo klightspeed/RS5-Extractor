@@ -305,7 +305,7 @@ namespace RS5_Extractor
                 writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
                 writer.WriteAttributeString("stride", "16");
                 writer.WriteStartElement("param");
-                writer.WriteAttributeString("name", "MATRIX");
+                writer.WriteAttributeString("name", "TRANSFORM");
                 writer.WriteAttributeString("type", "float4x4");
                 writer.WriteEndElement(); // param
                 writer.WriteEndElement(); // accessor
@@ -399,7 +399,7 @@ namespace RS5_Extractor
                 {
                     for (int i = 0; i < 4; i++)
                     {
-                        writer.WriteString(String.Format("{0,8:F5} ", joint.Matrix[j, i]));
+                        writer.WriteString(String.Format("{0,8:F5} ", joint.ReverseBindingMatrix[j, i]));
                     }
                 }
             }
@@ -503,7 +503,7 @@ namespace RS5_Extractor
                     throw new InvalidDataException("parent matrix not a transformation matrix");
                 }
 
-                float[,] relmatrix = MultiplyMatrix(parentmatrix, InvertTransformMatrix(joint.Matrix));
+                float[,] relmatrix = MultiplyMatrix(parentmatrix, InvertTransformMatrix(joint.ReverseBindingMatrix));
                 joint.InitialPose = relmatrix;
             }
 
@@ -524,7 +524,7 @@ namespace RS5_Extractor
             writer.WriteEndElement(); // matrix
             foreach (Joint childjoint in joint.Children)
             {
-                WriteColladaXmlSkeleton(writer, skeletonname, childjoint, joint.Matrix);
+                WriteColladaXmlSkeleton(writer, skeletonname, childjoint, joint.ReverseBindingMatrix);
             }
             writer.WriteEndElement(); // node
         }
@@ -1105,7 +1105,7 @@ namespace RS5_Extractor
                     Joint joint = new Joint
                     {
                         Name = JNTS.Data.GetString(jntofs, 128),
-                        Matrix = revbindmatrix,
+                        ReverseBindingMatrix = revbindmatrix,
                         JointNum = jntnum,
                         ParentNum = parent
                     };
@@ -1118,11 +1118,11 @@ namespace RS5_Extractor
                     joint.Children = Joints.Values.Where(j => j.ParentNum == joint.JointNum).ToArray();
                     if (joint.Parent == null)
                     {
-                        joint.InitialPose = InvertTransformMatrix(joint.Matrix);
+                        joint.InitialPose = InvertTransformMatrix(joint.ReverseBindingMatrix);
                     }
                     else
                     {
-                        joint.InitialPose = MultiplyMatrix(joint.Parent.Matrix, InvertTransformMatrix(joint.Matrix));
+                        joint.InitialPose = MultiplyMatrix(joint.Parent.ReverseBindingMatrix, InvertTransformMatrix(joint.ReverseBindingMatrix));
                     }
                 }
 
@@ -1147,12 +1147,7 @@ namespace RS5_Extractor
                             
                             if (joints[jntnum].ParentNum == -1)
                             {
-                                transform = MultiplyMatrix(transform, roottransform);
-                            }
-
-                            if (frameno == 0)
-                            {
-                                joints[jntnum].InitialPose = transform;
+                                transform = MultiplyMatrix(roottransform, transform);
                             }
 
                             anim.Frames.Add(transform);
