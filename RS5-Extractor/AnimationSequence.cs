@@ -7,6 +7,6 @@ namespace RS5_Extractor
 {
     public class AnimationSequence
     {
-        public List<float[,]> Frames = new List<float[,]>();
+        public SortedDictionary<int, Matrix4> Frames = new SortedDictionary<int, Matrix4>();
     }
 }

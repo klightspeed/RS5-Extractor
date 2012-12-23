@@ -5,22 +5,23 @@ using System.Text;
 
 namespace RS5_Extractor
 {
-    public class TextureCoordinate
+    public struct TextureCoordinate
     {
+        public Texture Texture;
         public float U;
         public float V;
 
         public override int GetHashCode()
         {
-            return U.GetHashCode() ^ (V.GetHashCode() >> 4);
+            return U.GetHashCode() ^ (V.GetHashCode() >> 4) ^ (Texture.GetHashCode() >> 8);
         }
 
         public override bool Equals(object obj)
         {
-            TextureCoordinate val = obj as TextureCoordinate;
-            if (val != null)
+            if (obj is TextureCoordinate)
             {
-                return val.U == U && val.V == V;
+                TextureCoordinate val = (TextureCoordinate)obj;
+                return val.U == U && val.V == V && val.Texture == Texture;
             }
             else
             {

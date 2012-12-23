@@ -55,7 +55,7 @@ namespace RS5_Extractor
                     Dictionary<string, string> animparams = animparamstring.Split(',').Select(v => v.Split(new char[] { '=' }, 2)).Where(v => v.Length == 2).ToDictionary(v => v[0], v => v[1]);
                     int startframe = Int32.Parse(animparams["F1"]);
                     int endframe = Int32.Parse(animparams["F2"]);
-                    float framerate = animparams.ContainsKey("rate") ? Single.Parse(animparams["rate"]) : 24.0F;
+                    float framerate = animparams.ContainsKey("rate") ? Single.Parse(animparams["rate"]) : 60.0F;
                     if (!animclips.ContainsKey(modelname))
                     {
                         animclips[modelname] = new List<AnimationClip>();
@@ -73,7 +73,7 @@ namespace RS5_Extractor
                 {
                     int startframe = Int32.Parse(animparams["F1"]);
                     int endframe = Int32.Parse(animparams["F2"]);
-                    float framerate = animparams.ContainsKey("rate") ? Single.Parse(animparams["rate"]) : 24.0F;
+                    float framerate = animparams.ContainsKey("rate") ? Single.Parse(animparams["rate"]) : 60.0F;
                     foreach (string modelname in new string[]{ "creature", "creature_ik" })
                     {
                         if (!animclips.ContainsKey(modelname))
@@ -87,7 +87,6 @@ namespace RS5_Extractor
 
             foreach (KeyValuePair<string, dynamic> handanim_kvp in environ.Data["player"]["hand_animations"])
             {
-                string modelname = "hands";
                 string animname = handanim_kvp.Key;
                 Dictionary<string, dynamic> animparams = handanim_kvp.Value;
                 if (animparams.ContainsKey("frames"))
@@ -95,11 +94,14 @@ namespace RS5_Extractor
                     int startframe = animparams["frames"][0];
                     int endframe = animparams["frames"][1];
                     float framerate = 24.0F;
-                    if (!animclips.ContainsKey(modelname))
+                    foreach (string modelname in new string[] { "hands", "hands_synth", "hands_ending" })
                     {
-                        animclips[modelname] = new List<AnimationClip>();
+                        if (!animclips.ContainsKey(modelname))
+                        {
+                            animclips[modelname] = new List<AnimationClip>();
+                        }
+                        animclips[modelname].Add(new AnimationClip { ModelName = modelname, Name = animname, StartFrame = startframe, NumFrames = endframe - startframe, FrameRate = framerate });
                     }
-                    animclips[modelname].Add(new AnimationClip { ModelName = modelname, Name = animname, StartFrame = startframe, NumFrames = endframe - startframe, FrameRate = framerate });
                 }
             }
 
@@ -112,25 +114,19 @@ namespace RS5_Extractor
                     Dictionary<string, dynamic> script = obj["SCRIPT"];
                     if (script.ContainsKey("frames"))
                     {
-                        string modelname = null;
                         int startframe = script["frames"][0];
                         int endframe = script["frames"][1];
-                        
-                        if (script.ContainsKey("synth_model"))
-                        {
-                            modelname = script["synth_model"];
-                        }
-                        else
-                        {
-                            modelname = null;
-                        }
 
-                        float framerate = 24.0F;
-                        if (!animclips.ContainsKey(modelname))
+                        foreach (string modelname in new string[] { "hands", "hands_synth", "hands_ending" })
                         {
-                            animclips[modelname] = new List<AnimationClip>();
+
+                            float framerate = 24.0F;
+                            if (!animclips.ContainsKey(modelname))
+                            {
+                                animclips[modelname] = new List<AnimationClip>();
+                            }
+                            animclips[modelname].Add(new AnimationClip { ModelName = modelname, Name = animname, StartFrame = startframe, NumFrames = endframe - startframe, FrameRate = framerate });
                         }
-                        animclips[modelname].Add(new AnimationClip { ModelName = modelname, Name = animname, StartFrame = startframe, NumFrames = endframe - startframe, FrameRate = framerate });
                     }
                 }
             }
@@ -168,7 +164,7 @@ namespace RS5_Extractor
             foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in main_rs5.Where(d => d.Value.Type == "IMDL"))
             {
                 ImmobileModel model = new ImmobileModel(dirent.Value);
-                if (!File.Exists(model.ColladaSkinFilename))
+                if (!File.Exists(model.ColladaFilename))
                 {
                     Console.WriteLine("Saving immobile model {0}", dirent.Key);
                     model.Save();
@@ -180,7 +176,7 @@ namespace RS5_Extractor
             foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in main_rs5.Where(d => d.Value.Type == "AMDL"))
             {
                 AnimatedModel model = new AnimatedModel(dirent.Value);
-                if (!File.Exists(model.ColladaSkinFilename))
+                if (!File.Exists(model.ColladaFilename))
                 {
                     Console.WriteLine("Saving animated model {0}", dirent.Key);
                     if (!model.HasGeometry)
@@ -195,12 +191,14 @@ namespace RS5_Extractor
 
                         if (model.HasSkeleton && model.IsAnimated)
                         {
+                            Console.WriteLine("  Saving all animations ({0} frames @ 24 fps)", model.NumAnimationFrames);
                             model.SaveAnimation("ALL", 0, model.NumAnimationFrames, 24.0F);
 
                             if (animclips.ContainsKey(model.Name))
                             {
                                 foreach (AnimationClip clip in animclips[model.Name])
                                 {
+                                    Console.WriteLine("  Saving animation {0} ({1} frames @ {2} fps)", clip.Name, clip.NumFrames, clip.FrameRate);
                                     model.SaveAnimation(clip.Name, clip.StartFrame, clip.NumFrames, clip.FrameRate);
                                 }
                             }

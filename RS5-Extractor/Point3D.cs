@@ -5,11 +5,11 @@ using System.Text;
 
 namespace RS5_Extractor
 {
-    public class Point3D
+    public struct Point3D
     {
-        public float X;
-        public float Y;
-        public float Z;
+        public double X;
+        public double Y;
+        public double Z;
 
         public override int GetHashCode()
         {
@@ -18,9 +18,9 @@ namespace RS5_Extractor
 
         public override bool Equals(object obj)
         {
-            Point3D val = obj as Point3D;
-            if (val != null)
+            if (obj is Point3D)
             {
+                Point3D val = (Point3D)obj;
                 return val.X == X && val.Y == Y && val.Z == Z;
             }
             else
@@ -29,9 +29,47 @@ namespace RS5_Extractor
             }
         }
 
+        public static bool operator ==(Point3D a, Point3D b)
+        {
+            return a.Equals(b);
+        }
+
+        public static bool operator !=(Point3D a, Point3D b)
+        {
+            return !a.Equals(b);
+        }
+
+        public static Point3D operator +(Point3D a, Point3D b)
+        {
+            return new Point3D { X = a.X + b.X, Y = a.Y + b.Y, Z = a.Z + b.Z };
+        }
+
+        public static Point3D operator -(Point3D a)
+        {
+            return new Point3D { X = -a.X, Y = -a.Y, Z = -a.Y };
+        }
+
+        public static Point3D operator *(Point3D a, double b)
+        {
+            return new Point3D { X = a.X * b, Y = a.Y * b, Z = a.Z * b };
+        }
+
+        public static Point3D operator -(Point3D a, Point3D b)
+        {
+            return a + (-b);
+        }
+
         public override string ToString()
         {
             return String.Format("<{0},{1},{2}>", X, Y, Z);
+        }
+
+        public static Point3D Zero
+        {
+            get
+            {
+                return new Point3D { X = 0, Y = 0, Z = 0 };
+            }
         }
     }
 }
