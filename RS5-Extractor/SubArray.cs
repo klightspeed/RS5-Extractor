@@ -129,6 +129,8 @@ namespace RS5_Extractor
 
     public class ByteSubArray : SubArray<byte>
     {
+        public int Position;
+
         public ByteSubArray(IList<byte> data, int offset, int length)
             : base(data, offset, length)
         {
@@ -154,9 +156,23 @@ namespace RS5_Extractor
             return BitConverter.ToInt32(GetBytes(offset, 4), 0);
         }
 
+        public int GetInt32()
+        {
+            int pos = Position;
+            Position += 4;
+            return GetInt32(pos);
+        }
+
         public long GetInt64(int offset)
         {
             return BitConverter.ToInt64(GetBytes(offset, 8), 0);
+        }
+
+        public long GetInt64()
+        {
+            int pos = Position;
+            Position += 8;
+            return GetInt64(pos);
         }
 
         public float GetSingle(int offset)
@@ -164,19 +180,48 @@ namespace RS5_Extractor
             return BitConverter.ToSingle(GetBytes(offset, 4), 0);
         }
 
-        public string GetString(int offset, int length)
+        public float GetSingle()
+        {
+            int pos = Position;
+            Position += 4;
+            return GetSingle(pos);
+        }
+
+        protected string GetString(int offset, int length, out int endoffset)
         {
             StringBuilder sb = new StringBuilder();
-            for (int i = offset; i < offset + length && this[i] != 0; i++)
+            int pos = offset;
+            for (pos = offset; pos < offset + length && this[pos] != 0; pos++)
             {
-                sb.Append((char)this[i]);
+                sb.Append((char)this[pos]);
             }
+            pos++;
+            endoffset = pos;
+            
             return sb.ToString();
+        }
+        
+        public string GetString(int offset, int length)
+        {
+            int endofs;
+            return GetString(offset, length, out endofs);
         }
 
         public string GetString(int offset)
         {
             return GetString(offset, this.Count - offset);
+        }
+
+        public string GetString()
+        {
+            return GetString(Position, this.Count - Position, out Position);
+        }
+
+        public byte GetByte()
+        {
+            int pos = Position;
+            Position++;
+            return this[pos];
         }
     }
 }

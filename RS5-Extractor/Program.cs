@@ -28,15 +28,132 @@ namespace RS5_Extractor
             }
         }
 
+        private static Dictionary<string, List<AnimationClip>> ProcessEnvironmentAnimations(RS5Environment environ)
+        {
+            Dictionary<string, List<AnimationClip>> animclips = new Dictionary<string, List<AnimationClip>>(StringComparer.InvariantCultureIgnoreCase);
+            
+            foreach (KeyValuePair<string, dynamic> animal_kvp in environ.Data["animals"])
+            {
+                string key = animal_kvp.Key;
+                dynamic animal = animal_kvp.Value;
+                string modelset = "animals\\" + key;
+                string modelname = animal["model"];
+                if (modelset.ToLower().StartsWith(modelname.ToLower()))
+                {
+                    modelset = modelset.Substring(modelname.Length);
+                    if (modelset.StartsWith("_"))
+                    {
+                        modelset = modelset.Substring(1);
+                    }
+                }
+                modelset = Path.GetFileName(modelset);
+                Dictionary<string, dynamic> animations = animal["animations"];
+                foreach (KeyValuePair<string, dynamic> anim_kvp in animations)
+                {
+                    string animname = (modelset == "" ? "" : (modelset + ".")) + anim_kvp.Key;
+                    string animparamstring = anim_kvp.Value;
+                    Dictionary<string, string> animparams = animparamstring.Split(',').Select(v => v.Split(new char[] { '=' }, 2)).Where(v => v.Length == 2).ToDictionary(v => v[0], v => v[1]);
+                    int startframe = Int32.Parse(animparams["F1"]);
+                    int endframe = Int32.Parse(animparams["F2"]);
+                    float framerate = animparams.ContainsKey("rate") ? Single.Parse(animparams["rate"]) : 24.0F;
+                    if (!animclips.ContainsKey(modelname))
+                    {
+                        animclips[modelname] = new List<AnimationClip>();
+                    }
+                    animclips[modelname].Add(new AnimationClip { ModelName = modelname, Name = animname, StartFrame = startframe, NumFrames = endframe - startframe, FrameRate = framerate });
+                }
+            }
+
+            foreach (KeyValuePair<string, dynamic> movement_kvp in environ.Data["creature"]["navigation"]["MOVEMENTS"])
+            {
+                string animname = movement_kvp.Key;
+                string animparamstring = movement_kvp.Value;
+                Dictionary<string, string> animparams = animparamstring.Split(',').Select(v => v.Split(new char[] { '=' }, 2)).Where(v => v.Length == 2).ToDictionary(v => v[0], v => v[1], StringComparer.InvariantCultureIgnoreCase);
+                if (animparams.ContainsKey("F1") && animparams.ContainsKey("F2"))
+                {
+                    int startframe = Int32.Parse(animparams["F1"]);
+                    int endframe = Int32.Parse(animparams["F2"]);
+                    float framerate = animparams.ContainsKey("rate") ? Single.Parse(animparams["rate"]) : 24.0F;
+                    foreach (string modelname in new string[]{ "creature", "creature_ik" })
+                    {
+                        if (!animclips.ContainsKey(modelname))
+                        {
+                            animclips[modelname] = new List<AnimationClip>();
+                        }
+                        animclips[modelname].Add(new AnimationClip { ModelName = modelname, Name = animname, StartFrame = startframe, NumFrames = endframe - startframe, FrameRate = framerate });
+                    }
+                }
+            }
+
+            foreach (KeyValuePair<string, dynamic> handanim_kvp in environ.Data["player"]["hand_animations"])
+            {
+                string modelname = "hands";
+                string animname = handanim_kvp.Key;
+                Dictionary<string, dynamic> animparams = handanim_kvp.Value;
+                if (animparams.ContainsKey("frames"))
+                {
+                    int startframe = animparams["frames"][0];
+                    int endframe = animparams["frames"][1];
+                    float framerate = 24.0F;
+                    if (!animclips.ContainsKey(modelname))
+                    {
+                        animclips[modelname] = new List<AnimationClip>();
+                    }
+                    animclips[modelname].Add(new AnimationClip { ModelName = modelname, Name = animname, StartFrame = startframe, NumFrames = endframe - startframe, FrameRate = framerate });
+                }
+            }
+
+            foreach (KeyValuePair<string, dynamic> obj_kvp in environ.Data["game_objects"])
+            {
+                string animname = obj_kvp.Key;
+                Dictionary<string, dynamic> obj = obj_kvp.Value;
+                if (obj.ContainsKey("SCRIPT"))
+                {
+                    Dictionary<string, dynamic> script = obj["SCRIPT"];
+                    if (script.ContainsKey("frames"))
+                    {
+                        string modelname = null;
+                        int startframe = script["frames"][0];
+                        int endframe = script["frames"][1];
+                        
+                        if (script.ContainsKey("synth_model"))
+                        {
+                            modelname = script["synth_model"];
+                        }
+                        else
+                        {
+                            modelname = null;
+                        }
+
+                        float framerate = 24.0F;
+                        if (!animclips.ContainsKey(modelname))
+                        {
+                            animclips[modelname] = new List<AnimationClip>();
+                        }
+                        animclips[modelname].Add(new AnimationClip { ModelName = modelname, Name = animname, StartFrame = startframe, NumFrames = endframe - startframe, FrameRate = framerate });
+                    }
+                }
+            }
+
+            return animclips;
+        }
+
         private static void Main(string[] args)
         {
-            Stream filestrm = File.Open(args[0], FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            Console.Write("Processing central directory ... ");
-            RS5Directory dirents = ProcessRS5File(filestrm);
+            Stream main_filestrm = File.Open("main.rs5", FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            Console.Write("Processing main.rs5 central directory ... ");
+            RS5Directory main_rs5 = ProcessRS5File(main_filestrm);
+            Console.WriteLine("Done");
+            Console.Write("Processing environment.rs5 ... ");
+            Stream environ_filestrm = File.Open("environment.rs5", FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            RS5Directory environ_rs5 = ProcessRS5File(environ_filestrm);
+            RS5Chunk environ_chunk = environ_rs5["environment"].Data;
+            RS5Environment environ = new RS5Environment(environ_chunk.Chunks["DATA"].Data);
+            Dictionary<string, List<AnimationClip>> animclips = ProcessEnvironmentAnimations(environ);
             Console.WriteLine("Done");
 
             Console.WriteLine("Processing Textures ... ");
-            foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in dirents.Where(d => d.Value.Type == "IMAG"))
+            foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in main_rs5.Where(d => d.Value.Type == "IMAG"))
             {
                 Texture.AddTexture(dirent.Value);
                 Texture texture = Texture.GetTexture(dirent.Key);
@@ -48,37 +165,49 @@ namespace RS5_Extractor
             }
 
             Console.WriteLine("Processing Immobile Models ... ");
-            foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in dirents.Where(d => d.Value.Type == "IMDL"))
+            foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in main_rs5.Where(d => d.Value.Type == "IMDL"))
             {
                 ImmobileModel model = new ImmobileModel(dirent.Value);
-                if (!File.Exists(model.ColladaFusedFilename))
+                if (!File.Exists(model.ColladaSkinFilename))
                 {
                     Console.WriteLine("Saving immobile model {0}", dirent.Key);
                     model.Save();
-                    model.SaveFused();
+                    model.SaveUnanimated();
                 }
             }
 
             Console.WriteLine("Processing Animated Models ... ");
-            foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in dirents.Where(d => d.Value.Type == "AMDL"))
+            foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in main_rs5.Where(d => d.Value.Type == "AMDL"))
             {
                 AnimatedModel model = new AnimatedModel(dirent.Value);
-                if (!File.Exists(model.ColladaFusedFilename))
+                if (!File.Exists(model.ColladaSkinFilename))
                 {
+                    Console.WriteLine("Saving animated model {0}", dirent.Key);
                     if (!model.HasGeometry)
                     {
                         Console.WriteLine("Model {0} has no geometry");
                     }
                     else
                     {
-                        Console.WriteLine("Saving animated model {0}", dirent.Key);
 
                         model.Save();
-                        model.SaveFused();
+                        model.SaveUnanimated();
 
-                        if (model.IsAnimated)
+                        if (model.HasSkeleton && model.IsAnimated)
                         {
-                            model.SaveAnimated();
+                            model.SaveAnimation("ALL", 0, model.NumAnimationFrames, 24.0F);
+
+                            if (animclips.ContainsKey(model.Name))
+                            {
+                                foreach (AnimationClip clip in animclips[model.Name])
+                                {
+                                    model.SaveAnimation(clip.Name, clip.StartFrame, clip.NumFrames, clip.FrameRate);
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("  model clip start and end frames not in environment");
+                            }
                         }
                     }
                 }

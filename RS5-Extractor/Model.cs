@@ -81,7 +81,7 @@ namespace RS5_Extractor
         {
             get
             {
-                return Joints.Values.Where(j => j.Parent == null).FirstOrDefault();
+                return Joints.Values.Where(j => j.Parent == null).SingleOrDefault();
             }
         }
 
@@ -117,6 +117,14 @@ namespace RS5_Extractor
             get
             {
                 return Animations.Count != 0;
+            }
+        }
+
+        public int NumAnimationFrames
+        {
+            get
+            {
+                return IsAnimated ? Animations.First().Value.Frames.Count : 0;
             }
         }
 
@@ -159,12 +167,20 @@ namespace RS5_Extractor
                 return HasGeometry && Vertices.First().Binormal != null;
             }
         }
-        
-        public string ColladaFusedFilename
+
+        public bool HasSkeleton
         {
             get
             {
-                return ".\\" + Name + ".fused.dae";
+                return RootJoint != null;
+            }
+        }
+        
+        public string ColladaSkinFilename
+        {
+            get
+            {
+                return ".\\" + Name + ".skin.dae";
             }
         }
 
@@ -176,13 +192,6 @@ namespace RS5_Extractor
             }
         }
 
-        public string ColladaAnimatedFilename
-        {
-            get
-            {
-                return ".\\" + Name + ".animated.dae";
-            }
-        }
 
         protected string[] ExludeTexturePrefixes = new string[]
         {
@@ -192,7 +201,7 @@ namespace RS5_Extractor
             "TEX\\SPECIAL"
         };
 
-        protected void Save(string filename, bool fused, bool animated)
+        protected void Save(string filename, bool skin, int startframe, int numframes, float framerate)
         {
             string dir = Path.GetDirectoryName(filename);
             if (!Directory.Exists(dir))
@@ -204,26 +213,28 @@ namespace RS5_Extractor
             {
                 using (XmlWriter writer = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = Encoding.UTF8, Indent = true }))
                 {
-                    WriteColladaXml(writer, fused, animated);
+                    WriteColladaXml(writer, skin, startframe, numframes, framerate);
                 }
             }
 
             File.SetLastWriteTimeUtc(filename, ModTime);
         }
 
-        public void SaveFused()
-        {
-            Save(ColladaFusedFilename, true, false);
-        }
-
         public void Save()
         {
-            Save(ColladaFilename, false, false);
+            Save(ColladaFilename, false, 0, 0, 0);
         }
 
-        public void SaveAnimated()
+        public void SaveAnimation(string animname, int startframe, int numframes, float framerate)
         {
-            Save(ColladaAnimatedFilename, true, true);
+            string filename = ".\\" + Name + ".anim." + animname + ".dae";
+            Save(filename, true, startframe, numframes, framerate);
+        }
+
+        public void SaveUnanimated()
+        {
+            string filename = ".\\" + Name + ".noanim.dae";
+            Save(filename, true, 0, 0, 0);
         }
 
         protected float[,] InvertTransformMatrix(float[,] matrix)
@@ -296,7 +307,7 @@ namespace RS5_Extractor
             };
         }
 
-        protected void WriteColladaXmlAnimation(XmlWriter writer, string animationname, string skeletonname, Dictionary<string, AnimationSequence> sequences)
+        protected void WriteColladaXmlAnimation(XmlWriter writer, string animationname, string skeletonname, Dictionary<string, AnimationSequence> sequences, int startframe, int numframes, float framerate)
         {
             writer.WriteStartElement("animation");
             foreach (KeyValuePair<string, AnimationSequence> sequence_kvp in sequences)
@@ -311,16 +322,16 @@ namespace RS5_Extractor
                 writer.WriteAttributeString("id", seqid + "_time");
                 writer.WriteStartElement("float_array");
                 writer.WriteAttributeString("id", seqid + "_time_array");
-                writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
-                for (int i = 0; i < sequence.Frames.Count; i++)
+                writer.WriteAttributeString("count", numframes.ToString());
+                for (int i = 0; i < numframes; i++)
                 {
-                    writer.WriteString(String.Format("{0:F3} ", i / sequence.FrameRate + 1.0));
+                    writer.WriteString(String.Format("{0:F3} ", i / framerate));
                 }
                 writer.WriteEndElement(); // float_array
                 writer.WriteStartElement("technique_common");
                 writer.WriteStartElement("accessor");
                 writer.WriteAttributeString("source", "#" + seqid + "_time_array");
-                writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
+                writer.WriteAttributeString("count", numframes.ToString());
                 writer.WriteAttributeString("stride", "1");
                 writer.WriteStartElement("param");
                 writer.WriteAttributeString("name", "TIME");
@@ -333,8 +344,8 @@ namespace RS5_Extractor
                 writer.WriteAttributeString("id", seqid + "_out_xfrm");
                 writer.WriteStartElement("float_array");
                 writer.WriteAttributeString("id", seqid + "_out_xfrm_array");
-                writer.WriteAttributeString("count", (sequence.Frames.Count * 16).ToString());
-                for (int n = 0; n < sequence.Frames.Count; n++)
+                writer.WriteAttributeString("count", (numframes * 16).ToString());
+                for (int n = startframe; n < startframe + numframes; n++)
                 {
                     writer.WriteWhitespace("\n");
                     for (int j = 0; j < 4; j++)
@@ -350,7 +361,7 @@ namespace RS5_Extractor
                 writer.WriteStartElement("technique_common");
                 writer.WriteStartElement("accessor");
                 writer.WriteAttributeString("source", "#" + seqid + "_out_xfrm_array");
-                writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
+                writer.WriteAttributeString("count", numframes.ToString());
                 writer.WriteAttributeString("stride", "16");
                 writer.WriteStartElement("param");
                 writer.WriteAttributeString("name", "TRANSFORM");
@@ -363,7 +374,7 @@ namespace RS5_Extractor
                 writer.WriteAttributeString("id", seqid + "_interp");
                 writer.WriteStartElement("Name_array");
                 writer.WriteAttributeString("id", seqid + "_interp_array");
-                writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
+                writer.WriteAttributeString("count", numframes.ToString());
                 for (int i = 0; i < sequence.Frames.Count; i++)
                 {
                     writer.WriteString("LINEAR ");
@@ -372,7 +383,7 @@ namespace RS5_Extractor
                 writer.WriteStartElement("technique_common");
                 writer.WriteStartElement("accessor");
                 writer.WriteAttributeString("source", "#" + seqid + "_interp_array");
-                writer.WriteAttributeString("count", sequence.Frames.Count.ToString());
+                writer.WriteAttributeString("count", numframes.ToString());
                 writer.WriteAttributeString("stride", "1");
                 writer.WriteStartElement("param");
                 writer.WriteAttributeString("name", "INTERPOLATION");
@@ -558,7 +569,7 @@ namespace RS5_Extractor
             writer.WriteStartElement("node");
             writer.WriteAttributeString("id", skeletonname + "_" + joint.Symbol);
             writer.WriteAttributeString("name", joint.Name);
-            writer.WriteAttributeString("sid", joint.Name);
+            writer.WriteAttributeString("sid", joint.Symbol);
             writer.WriteAttributeString("type", "JOINT");
             writer.WriteStartElement("matrix");
             writer.WriteAttributeString("sid", "transform");
@@ -905,8 +916,8 @@ namespace RS5_Extractor
 
             return vertices;
         }
-        
-        public void WriteColladaXml(XmlWriter writer, bool fused, bool animate)
+
+        public void WriteColladaXml(XmlWriter writer, bool skin, int startframe, int numframes, float framerate)
         {
             writer.WriteStartElement("COLLADA", "http://www.collada.org/2005/11/COLLADASchema");
             writer.WriteAttributeString("version", "1.4.1");
@@ -923,6 +934,7 @@ namespace RS5_Extractor
             writer.WriteElementString("up_axis", "Z_UP");
             writer.WriteEndElement(); // asset
             writer.WriteStartElement("library_images");
+            
             foreach (KeyValuePair<string, Texture> texture_kvp in Textures)
             {
                 string texname = texture_kvp.Key;
@@ -934,8 +946,10 @@ namespace RS5_Extractor
                 writer.WriteElementString("init_from", String.Join("", this.Name.Where(c => c == '\\').Select(c => "../")) + texture.PNGFilename.Replace('\\', '/'));
                 writer.WriteEndElement(); // image
             }
+            
             writer.WriteEndElement();
             writer.WriteStartElement("library_effects");
+            
             foreach (KeyValuePair<string, Texture> texture_kvp in Textures)
             {
                 string texname = texture_kvp.Key;
@@ -1020,8 +1034,10 @@ namespace RS5_Extractor
                 writer.WriteEndElement(); // extra
                 writer.WriteEndElement(); // effect
             }
+            
             writer.WriteEndElement(); // library_effects
             writer.WriteStartElement("library_materials");
+            
             foreach (KeyValuePair<string, Texture> texture_kvp in Textures)
             {
                 string texname = texture_kvp.Key;
@@ -1038,7 +1054,8 @@ namespace RS5_Extractor
             Dictionary<string, List<Vertex>> vtxlists = new Dictionary<string,List<Vertex>>();
             Dictionary<string, Dictionary<string, Texture>> texlists = new Dictionary<string, Dictionary<string, Texture>>();
             writer.WriteStartElement("library_geometries");
-            if (fused)
+            
+            if (skin)
             {
                 Dictionary<string, Texture> texlist = Textures.Where(kvp => ExludeTexturePrefixes.Count(v => kvp.Value.Name.StartsWith(v)) == 0).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
                 List<Triangle> triangles = Triangles.Where(t => texlist.Values.Contains(t.Texture)).ToList();
@@ -1074,14 +1091,16 @@ namespace RS5_Extractor
                     WriteColladaXmlJointsSkin(writer, geometryname, "model_skel", skinname, vertices, joints);
                 }
                 writer.WriteEndElement(); // library_controllers
-                if (Animations.Count != 0 && animate)
+
+                if (numframes != 0)
                 {
                     writer.WriteStartElement("library_animations");
-                    WriteColladaXmlAnimation(writer, "model_anim", "model_skel", Animations);
+                    WriteColladaXmlAnimation(writer, "model_anim", "model_skel", Animations, startframe, numframes, framerate);
                     writer.WriteEndElement(); // library_animations
                 }
             }
-            if (!fused)
+
+            if (!skin)
             {
                 writer.WriteStartElement("library_nodes");
                 string skeletonname = null;
@@ -1125,13 +1144,16 @@ namespace RS5_Extractor
                 writer.WriteEndElement(); // node
                 writer.WriteEndElement(); // library_nodes
             }
+
             writer.WriteStartElement("library_visual_scenes");
             writer.WriteStartElement("visual_scene");
             writer.WriteAttributeString("id", "visual_scene");
-            if (fused)
+            
+            if (skin)
             {
                 string skeletonname = null;
                 bool hasskin = false;
+
                 if (RootJoint != null)
                 {
                     skeletonname = "model_skel";
@@ -1143,7 +1165,7 @@ namespace RS5_Extractor
                 {
                     string geometryname = texlist_kvp.Key;
                     Dictionary<string, Texture> texlist = texlist_kvp.Value;
-                    WriteColladaXmlGeometryInstance(writer, geometryname + "_node", geometryname, hasskin ? geometryname + "_skin" : null, skeletonname, texlist);
+                    WriteColladaXmlGeometryInstance(writer, geometryname + "_node", geometryname, hasskin ? (geometryname + "_skin") : null, skeletonname, texlist);
                 }
             }
             else
@@ -1155,6 +1177,7 @@ namespace RS5_Extractor
                 writer.WriteEndElement(); // instance_node
                 writer.WriteEndElement(); // node
             }
+
             writer.WriteEndElement(); // visual_scene
             writer.WriteEndElement(); // library_visual_scenes
             writer.WriteStartElement("scene");
@@ -1407,7 +1430,6 @@ namespace RS5_Extractor
                     for (int jntnum = 0; jntnum < joints.Length; jntnum++)
                     {
                         AnimationSequence anim = new AnimationSequence();
-                        anim.FrameRate = 10.0F;
                         for (int frameno = 0; frameno < FRMS.Data.Count / (joints.Length * 64); frameno++)
                         {
                             int frameofs = (frameno * Joints.Count + jntnum) * 64;

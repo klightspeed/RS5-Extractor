@@ -47,6 +47,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AnimationClip.cs" />
     <Compile Include="AnimationSequence.cs" />
     <Compile Include="DotNetZip\CommonSrc\CRC32.cs" />
     <Compile Include="DotNetZip\Zlib\Deflate.cs" />
@@ -61,6 +62,7 @@
     <Compile Include="DotNetZip\Zlib\ZlibCodec.cs" />
     <Compile Include="DotNetZip\Zlib\ZlibConstants.cs" />
     <Compile Include="DotNetZip\Zlib\ZlibStream.cs" />
+    <Compile Include="RS5Environment.cs" />
     <Compile Include="Joint.cs" />
     <Compile Include="JointInfluence.cs" />
     <Compile Include="Model.cs" />
