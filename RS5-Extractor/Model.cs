@@ -759,7 +759,7 @@ namespace RS5_Extractor
                 foreach (Vertex vertex in vertices)
                 {
                     writer.WriteWhitespace("\n");
-                    writer.WriteString(String.Format("{0:F3} {1:F3} {2:F3}", vertex.Tangent.X, vertex.Tangent.Y, vertex.Tangent.Z));
+                    writer.WriteString(String.Format("{0:F3} {1:F3} {2:F3}", vertex.Binormal.X, vertex.Binormal.Y, vertex.Binormal.Z));
                 }
                 writer.WriteWhitespace("\n");
                 writer.WriteEndElement(); // float_array
@@ -872,8 +872,8 @@ namespace RS5_Extractor
             writer.WriteElementString("created", ModTime.ToString("O"));
             writer.WriteElementString("modified", ModTime.ToString("O"));
             writer.WriteStartElement("unit");
-            writer.WriteAttributeString("meter", "1.0");
-            writer.WriteAttributeString("name", "meter");
+            writer.WriteAttributeString("meter", "0.01");
+            writer.WriteAttributeString("name", "centimeter");
             writer.WriteEndElement(); // unit
             writer.WriteElementString("up_axis", "Z_UP");
             writer.WriteEndElement(); // asset

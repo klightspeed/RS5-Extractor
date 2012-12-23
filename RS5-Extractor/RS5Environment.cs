@@ -98,7 +98,7 @@ namespace RS5_Extractor
                 case 'M': return ProcessList(data, path);
                 case '.': return null;
                 default:
-                    throw new NotImplementedException(String.Format("Unknown type {0}", (char)type));
+                    throw new NotImplementedException(String.Format("Unknown type {0} ({0:X8})", (char)type));
             }
         }
 
