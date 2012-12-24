@@ -856,7 +856,7 @@ namespace RS5_Extractor
             writer.WriteStartElement("extra");
             writer.WriteStartElement("technique");
             writer.WriteAttributeString("profile", "MAYA");
-            writer.WriteElementString("double_sided", "1");
+            writer.WriteElementString("double_sided", "0");
             writer.WriteEndElement(); // technique
             writer.WriteEndElement(); // extra
             writer.WriteEndElement(); // geometry
@@ -904,6 +904,10 @@ namespace RS5_Extractor
                 writer.WriteStartElement("effect");
                 writer.WriteAttributeString("id", texname + "_fx");
                 writer.WriteStartElement("profile_COMMON");
+                writer.WriteStartElement("newparam");
+                writer.WriteElementString("semantic", "DOUBLE_SIDED");
+                writer.WriteElementString("bool", "false");
+                writer.WriteEndElement(); // newparam
                 writer.WriteStartElement("newparam");
                 writer.WriteAttributeString("sid", texname + "_sfc");
                 writer.WriteStartElement("surface");
@@ -964,11 +968,11 @@ namespace RS5_Extractor
                 writer.WriteStartElement("extra");
                 writer.WriteStartElement("technique");
                 writer.WriteAttributeString("profile", "GOOGLEEARTH");
-                writer.WriteElementString("double_sided", "1");
+                writer.WriteElementString("double_sided", "0");
                 writer.WriteEndElement(); // technique
                 writer.WriteStartElement("technique");
                 writer.WriteAttributeString("profile", "OKINO");
-                writer.WriteElementString("double_sided", "1");
+                writer.WriteElementString("double_sided", "0");
                 writer.WriteEndElement(); // technique
                 writer.WriteEndElement(); // extra
                 writer.WriteEndElement(); // technique
@@ -976,7 +980,7 @@ namespace RS5_Extractor
                 writer.WriteStartElement("extra");
                 writer.WriteStartElement("technique");
                 writer.WriteAttributeString("profile", "MAX3D");
-                writer.WriteElementString("double_sided", "1");
+                writer.WriteElementString("double_sided", "0");
                 writer.WriteEndElement(); // technique
                 writer.WriteEndElement(); // extra
                 writer.WriteEndElement(); // effect
