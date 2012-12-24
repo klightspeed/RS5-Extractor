@@ -282,6 +282,7 @@ namespace RS5_Extractor
                     int vtxofs = vtxnum * 36;
                     Vertices.Add(new Vertex
                     {
+                        Index = vtxnum,
                         Position = roottransform * new Vector4
                         {
                             X = VTXL.Data.GetSingle(vtxofs + 0),
@@ -453,6 +454,7 @@ namespace RS5_Extractor
                     int vtxofs = vtxnum * 32;
                     Vertex vertex = new Vertex
                     {
+                        Index = vtxnum,
                         Position = roottransform * new Vector4
                         {
                             X = VTXS.Data.GetSingle(vtxofs + 0),
@@ -475,9 +477,10 @@ namespace RS5_Extractor
                         }.Normalize()
                     };
 
+                    List<JointInfluence> influences = new List<JointInfluence>();
+
                     if (Joints.Count != 0)
                     {
-                        List<JointInfluence> influences = new List<JointInfluence>();
 
                         for (int i = 0; i < 4; i++)
                         {
@@ -499,8 +502,9 @@ namespace RS5_Extractor
                             }
                         }
 
-                        vertex.JointInfluence = influences.ToArray();
                     }
+
+                    vertex.JointInfluence = influences.ToArray();
 
                     Vertices.Add(vertex);
                 }

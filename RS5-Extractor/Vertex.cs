@@ -8,6 +8,7 @@ namespace RS5_Extractor
 {
     public class Vertex
     {
+        public int Index;
         public Vector4 Position;
         public Vector4 Normal;
         public Vector4 Tangent;

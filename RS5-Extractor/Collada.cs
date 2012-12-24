@@ -182,19 +182,15 @@ namespace RS5_Extractor
             );
         }
 
-        protected static XNode BindMaterial(int texnum, string texname, Texture texture)
+        protected static XNode InstanceMaterial(int texnum, string texname, Texture texture)
         {
-            return new XElement(ns + "bind_material",
-                new XElement(ns + "technique_common",
-                    new XElement(ns + "instance_material",
-                        new XAttribute("symbol", texname + "_lnk"),
-                        new XAttribute("target", "#" + texname + "_mtl"),
-                        new XElement(ns + "bind_vertex_input",
-                            new XAttribute("semantic", "TEXCOORD"),
-                            new XAttribute("input_semantic", "TEXCOORD"),
-                            new XAttribute("input_set", String.Format("{0}", texnum))
-                        )
-                    )
+            return new XElement(ns + "instance_material",
+                new XAttribute("symbol", texname + "_lnk"),
+                new XAttribute("target", "#" + texname + "_mtl"),
+                new XElement(ns + "bind_vertex_input",
+                    new XAttribute("semantic", "TEXCOORD"),
+                    new XAttribute("input_semantic", "TEXCOORD"),
+                    new XAttribute("input_set", String.Format("{0}", texnum))
                 )
             );
         }
@@ -224,7 +220,11 @@ namespace RS5_Extractor
                 new XAttribute("id", modelname),
                 new XElement(ns + "instance_geometry",
                     new XAttribute("url", "#" + geometryname),
-                    texsyms.Select((sym,i) => BindMaterial(i, sym, textures[sym]))
+                    new XElement(ns + "bind_material",
+                        new XElement(ns + "technique_common",
+                            texsyms.Select((sym,i) => InstanceMaterial(i, sym, textures[sym]))
+                        )
+                    )
                 ),
                 NodeVisibility(textures, visible)
             );
@@ -237,7 +237,11 @@ namespace RS5_Extractor
                 new XElement(ns + "instance_controller",
                     new XAttribute("url", "#" + skinname),
                     new XElement(ns + "skeleton", "#" + skeletonname),
-                    textures.Select((kvp, i) => BindMaterial(i, kvp.Key, kvp.Value))
+                    new XElement(ns + "bind_material",
+                        new XElement(ns + "technique_common",
+                            texsyms.Select((sym, i) => InstanceMaterial(i, sym, textures[sym]))
+                        )
+                    )
                 )
             );
         }
@@ -334,7 +338,7 @@ namespace RS5_Extractor
         protected static XNode Geometry(string geometryname, List<Triangle> triangles, Dictionary<string, Texture> textures, out List<Vertex> vertices, out List<string> texsyms)
         {
             vertices = new List<Vertex>();
-            Dictionary<Vertex, int> vtxrevindex = new Dictionary<Vertex, int>();
+            Dictionary<int, int> vtxrevindex = new Dictionary<int, int>();
             Dictionary<string, List<Triangle>> trilists = new Dictionary<string, List<Triangle>>();
             Dictionary<string, int> texrevindex = new Dictionary<string, int>();
             texsyms = new List<string>();
@@ -345,6 +349,7 @@ namespace RS5_Extractor
                 trilists.Add(texture_kvp.Key, new List<Triangle>());
                 texsyms.Add(texture_kvp.Key);
                 texrevindex[texture_kvp.Key] = texnum;
+                texnum++;
             }
 
             foreach (Triangle triangle in triangles)
@@ -354,9 +359,9 @@ namespace RS5_Extractor
                     trilists[triangle.TextureSymbol].Add(triangle);
                     foreach (Vertex vertex in new Vertex[] { triangle.A, triangle.B, triangle.C })
                     {
-                        if (!vtxrevindex.ContainsKey(vertex))
+                        if (!vtxrevindex.ContainsKey(vertex.Index))
                         {
-                            vtxrevindex[vertex] = vertices.Count;
+                            vtxrevindex[vertex.Index] = vertices.Count;
                             vertices.Add(vertex);
                         }
                     }
@@ -394,7 +399,7 @@ namespace RS5_Extractor
             {
                 trianglexml.Add(
                     new XElement(ns + "triangles",
-                        new XAttribute("count", triangles.Count),
+                        new XAttribute("count", trilist_kvp.Value.Count),
                         new XAttribute("material", trilist_kvp.Key + "_lnk"),
                         new XElement(ns + "input",
                             new XAttribute("offset", 0),
@@ -408,7 +413,7 @@ namespace RS5_Extractor
                             new XAttribute("set", String.Format("{0}", texrevindex[trilist_kvp.Key]))
                         ),
                         new XElement(ns + "p",
-                            String.Join(" ", trilist_kvp.Value.SelectMany(t => new Vertex[] { t.A, t.B, t.C }).Select(v => String.Format("{0} {0}", vtxrevindex[v])))
+                            String.Join(" ", trilist_kvp.Value.SelectMany(t => new Vertex[] { t.A, t.B, t.C }).Select(v => String.Format("{0} {0}", vtxrevindex[v.Index])))
                         )
                     )
                 );
@@ -545,7 +550,7 @@ namespace RS5_Extractor
                     controllers.Add(SkinController("model_mesh", "model_skel", "model_skin", vtxlist, model.Joints));
                     scenenodes.Add(SkinControllerInstance("model", "model_skin", "model_skel", texlist, texsyms));
                     scenenodes.Add(Skeleton("model_skel", model.RootJoint, Matrix4.Identity));
-                    if (model.Animations != null)
+                    if (model.Animations != null && animate)
                     {
                         animation = Animation("model_anim", "model_skel", model.Animations, startframe, numframes, framerate);
                     }
