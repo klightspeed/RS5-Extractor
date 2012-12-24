@@ -9,10 +9,10 @@ namespace RS5_Extractor
     public class Vertex
     {
         public int Index;
-        public Point3D Position;
-        public Point3D Normal;
-        public Point3D Tangent;
-        public Point3D Binormal;
+        public Vector4 Position;
+        public Vector4 Normal;
+        public Vector4 Tangent;
+        public Vector4 Binormal;
         public TextureCoordinate TexCoord;
         public JointInfluence[] JointInfluence;
         public byte[] ExtraData;

@@ -12,17 +12,14 @@ namespace RS5_Extractor
         private double v21, v22, v23, v24;
         private double v31, v32, v33, v34;
         private double v41, v42, v43, v44;
-        private int _AddPos;
+        private int _AddPos1;
+        private int _AddPos2;
 
-        public double this[int j,int i]
+        public double this[int i]
         {
             get
             {
-                if (j < 0 || j >= 4 || i < 0 || i >= 4)
-                {
-                    throw new IndexOutOfRangeException();
-                }
-                switch (j * 4 + i)
+                switch (i)
                 {
                     case 0: return v11;
                     case 1: return v12;
@@ -45,11 +42,7 @@ namespace RS5_Extractor
             }
             set
             {
-                if (j < 0 || j >= 4 || i < 0 || i >= 4)
-                {
-                    throw new IndexOutOfRangeException();
-                }
-                switch (j * 4 + i)
+                switch (i)
                 {
                     case 0: v11 = value; break;
                     case 1: v12 = value; break;
@@ -72,6 +65,26 @@ namespace RS5_Extractor
             }
         }
 
+        public double this[int j,int i]
+        {
+            get
+            {
+                if (j < 0 || j >= 4 || i < 0 || i >= 4)
+                {
+                    throw new IndexOutOfRangeException();
+                }
+                return this[j * 4 + i];
+            }
+            set
+            {
+                if (j < 0 || j >= 4 || i < 0 || i >= 4)
+                {
+                    throw new IndexOutOfRangeException();
+                }
+                this[j * 4 + i] = value;
+            }
+        }
+
         public Matrix4(double[,] array)
             : this()
         {
@@ -91,7 +104,8 @@ namespace RS5_Extractor
             v42 = array[3, 1];
             v43 = array[3, 2];
             v44 = array[3, 3];
-            _AddPos = 4;
+            _AddPos1 = 16;
+            _AddPos2 = 4;
         }
 
         public static Matrix4 operator -(Matrix4 mat)
@@ -130,12 +144,12 @@ namespace RS5_Extractor
             return mat;
         }
 
-        public static Point3D operator *(Matrix4 mat, Point3D inpoint)
+        public static Vector4 operator *(Matrix4 mat, Vector4 inpoint)
         {
-            Point3D outpoint = new Point3D();
-            for (int i = 0; i < 3; i++)
+            Vector4 outpoint = new Vector4();
+            for (int i = 0; i < 4; i++)
             {
-                outpoint.X = mat[i, 0] * inpoint.X + mat[i, 1] * inpoint.Y + mat[i, 2] * inpoint.Z;
+                outpoint[i] = mat[i, 0] * inpoint[0] + mat[i, 1] * inpoint[1] + mat[i, 2] * inpoint[2] + mat[i, 3] * inpoint[3];
             }
             return outpoint;
         }
@@ -268,18 +282,42 @@ namespace RS5_Extractor
             return !(a == b);
         }
 
-        public void Add(double a, double b, double c, double d)
+        public bool EtaEqual(Matrix4 a, double eta)
         {
-            switch (_AddPos)
+            for (int j = 0; j < 4; j++)
             {
-                case 0: v11 = a; v12 = b; v13 = c; v14 = d; break;
-                case 1: v21 = a; v22 = b; v23 = c; v24 = d; break;
-                case 2: v31 = a; v32 = b; v33 = c; v34 = d; break;
-                case 3: v41 = a; v42 = b; v43 = c; v44 = d; break;
-                default: throw new InvalidOperationException("Too many rows");
+                for (int i = 0; i < 4; i++)
+                {
+                    if ((this[j, i] < a[j, i] * (1.0 - eta)) || (a[j, i] < this[j, i] * (1.0 - eta)))
+                    {
+                        return false;
+                    }
+                }
             }
 
-            _AddPos++;
+            return true;
+        }
+
+        public void Add(double v)
+        {
+            if (_AddPos2 != 0)
+            {
+                throw new InvalidOperationException("Mixed calls to Add(v) and Add(a,b,c,d)");
+            }
+            this[_AddPos1++] = v;
+        }
+
+        public void Add(double a, double b, double c, double d)
+        {
+            if (_AddPos1 != 0)
+            {
+                throw new InvalidOperationException("Mixed calls to Add(v) and Add(a,b,c,d)");
+            }
+            this[_AddPos2, 0] = a;
+            this[_AddPos2, 1] = b;
+            this[_AddPos2, 2] = c;
+            this[_AddPos2, 3] = d;
+            _AddPos2++;
         }
 
         IEnumerator IEnumerable.GetEnumerator()

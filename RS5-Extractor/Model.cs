@@ -148,7 +148,7 @@ namespace RS5_Extractor
         {
             get
             {
-                return HasGeometry && Vertices.First().Normal != Point3D.Zero;
+                return HasGeometry && Vertices.First().Normal != Vector4.Zero;
             }
         }
 
@@ -156,7 +156,7 @@ namespace RS5_Extractor
         {
             get
             {
-                return HasGeometry && Vertices.First().Tangent != Point3D.Zero;
+                return HasGeometry && Vertices.First().Tangent != Vector4.Zero;
             }
         }
 
@@ -164,7 +164,7 @@ namespace RS5_Extractor
         {
             get
             {
-                return HasGeometry && Vertices.First().Binormal != Point3D.Zero;
+                return HasGeometry && Vertices.First().Binormal != Vector4.Zero;
             }
         }
 
@@ -246,7 +246,10 @@ namespace RS5_Extractor
                 int index = startframe + i * incr;
                 if (sequence.Frames[index - 1] != sequence.Frames[index] || sequence.Frames[index + 1] != sequence.Frames[index])
                 {
-                    outseq.Frames[i] = sequence.Frames[index];
+                    if (!sequence.Frames[index].EtaEqual((sequence.Frames[index - 1] + sequence.Frames[index + 1]) * 0.5, 1.0 / 1048576))
+                    {
+                        outseq.Frames[i] = sequence.Frames[index];
+                    }
                 }
             }
 
@@ -1167,6 +1170,14 @@ namespace RS5_Extractor
             RS5Chunk VTXL = Chunk.Chunks["VTXL"];
             RS5Chunk TRIL = Chunk.Chunks["TRIL"];
 
+            Matrix4 roottransform = new Matrix4
+            {
+                { -1, 0, 0, 0 },
+                { 0, 1, 0, 0 },
+                { 0, 0, 1, 0 },
+                { 0, 0, 0, 1 }
+            };
+
             for (int texnum = 0; texnum < BHDR.Data.Count / 144; texnum++)
             {
                 int texofs = texnum * 144;
@@ -1178,70 +1189,66 @@ namespace RS5_Extractor
                 int numtri = BHDR.Data.GetInt32(texofs + 140);
                 Texture texture = Texture.GetTexture(texname);
 
-                /*
-                if (!(texname.ToUpper().StartsWith("TEX\\CX") ||
-                      texname.ToUpper().StartsWith("TEX\\LX") ||
-                      texname.ToUpper().StartsWith("TEX\\SPECIAL") ||
-                      texname.ToUpper().StartsWith("TEX\\CCX")))
+                Textures.Add(texsym, texture);
+
+                int startvtx = Vertices.Count;
+                for (int vtxnum = firstvtx; vtxnum < firstvtx + numvtx; vtxnum++)
                 {
-                 */
-                    Textures.Add(texsym, texture);
-
-                    int startvtx = Vertices.Count;
-                    for (int vtxnum = firstvtx; vtxnum < firstvtx + numvtx; vtxnum++)
+                    int vtxofs = vtxnum * 36;
+                    Vertices.Add(new Vertex
                     {
-                        int vtxofs = vtxnum * 36;
-                        Vertices.Add(new Vertex
+                        Position = roottransform * new Vector4
                         {
-                            Position = new Point3D
-                            {
-                                X = -VTXL.Data.GetSingle(vtxofs + 0),
-                                Y = VTXL.Data.GetSingle(vtxofs + 4),
-                                Z = VTXL.Data.GetSingle(vtxofs + 8),
-                            },
-                            TexCoord = new TextureCoordinate
-                            {
-                                U = VTXL.Data.GetSingle(vtxofs + 24),
-                                V = -VTXL.Data.GetSingle(vtxofs + 28),
-                                Texture = texture
-                            },
-                            Normal = new Point3D
-                            {
-                                X = -(VTXL.Data[vtxofs + 14] - 0x80) / 127.0F,
-                                Y = (VTXL.Data[vtxofs + 13] - 0x80) / 127.0F,
-                                Z = (VTXL.Data[vtxofs + 12] - 0x80) / 127.0F
-                            },
-                            Tangent = new Point3D
-                            {
-                                X = -(VTXL.Data[vtxofs + 18] - 0x80) / 127.0F,
-                                Y = (VTXL.Data[vtxofs + 17] - 0x80) / 127.0F,
-                                Z = (VTXL.Data[vtxofs + 16] - 0x80) / 127.0F
-                            },
-                            Binormal = new Point3D
-                            {
-                                X = -(VTXL.Data[vtxofs + 22] - 0x80) / 127.0F,
-                                Y = (VTXL.Data[vtxofs + 21] - 0x80) / 127.0F,
-                                Z = (VTXL.Data[vtxofs + 20] - 0x80) / 127.0F
-                            },
-                            ExtraData = VTXL.Data.GetBytes(vtxofs + 32, 4)
-                        });
-                    }
-
-                    for (int trinum = firsttri; trinum < firsttri + numtri - 2; trinum += 3)
-                    {
-                        int triofs = trinum * 4;
-                        int a = TRIL.Data.GetInt32(triofs + 0) + startvtx;
-                        int b = TRIL.Data.GetInt32(triofs + 4) + startvtx;
-                        int c = TRIL.Data.GetInt32(triofs + 8) + startvtx;
-                        Triangles.Add(new Triangle
+                            X = VTXL.Data.GetSingle(vtxofs + 0),
+                            Y = VTXL.Data.GetSingle(vtxofs + 4),
+                            Z = VTXL.Data.GetSingle(vtxofs + 8),
+                            W = 1.0
+                        },
+                        TexCoord = new TextureCoordinate
                         {
-                            A = Vertices[a],
-                            B = Vertices[b],
-                            C = Vertices[c],
+                            U = VTXL.Data.GetSingle(vtxofs + 24),
+                            V = -VTXL.Data.GetSingle(vtxofs + 28),
                             Texture = texture
-                        });
-                    }
-                //}
+                        },
+                        Normal = roottransform * new Vector4
+                        {
+                            X = (VTXL.Data[vtxofs + 14] - 0x80) / 127.0,
+                            Y = (VTXL.Data[vtxofs + 13] - 0x80) / 127.0,
+                            Z = (VTXL.Data[vtxofs + 12] - 0x80) / 127.0,
+                            W = 0.0
+                        }.Normalize(),
+                        Tangent = roottransform * new Vector4
+                        {
+                            X = (VTXL.Data[vtxofs + 18] - 0x80) / 127.0,
+                            Y = (VTXL.Data[vtxofs + 17] - 0x80) / 127.0,
+                            Z = (VTXL.Data[vtxofs + 16] - 0x80) / 127.0,
+                            W = 0.0
+                        }.Normalize(),
+                        Binormal = roottransform * new Vector4
+                        {
+                            X = (VTXL.Data[vtxofs + 22] - 0x80) / 127.0,
+                            Y = (VTXL.Data[vtxofs + 21] - 0x80) / 127.0,
+                            Z = (VTXL.Data[vtxofs + 20] - 0x80) / 127.0,
+                            W = 0.0
+                        }.Normalize(),
+                        ExtraData = VTXL.Data.GetBytes(vtxofs + 32, 4)
+                    });
+                }
+
+                for (int trinum = firsttri; trinum < firsttri + numtri - 2; trinum += 3)
+                {
+                    int triofs = trinum * 4;
+                    int a = TRIL.Data.GetInt32(triofs + 0) + startvtx;
+                    int b = TRIL.Data.GetInt32(triofs + 4) + startvtx;
+                    int c = TRIL.Data.GetInt32(triofs + 8) + startvtx;
+                    Triangles.Add(new Triangle
+                    {
+                        A = Vertices[a],
+                        B = Vertices[b],
+                        C = Vertices[c],
+                        Texture = texture
+                    });
+                }
             }
         }
     }
@@ -1264,8 +1271,8 @@ namespace RS5_Extractor
             Matrix4 roottransform = new Matrix4
             {
                 { 1, 0, 0, 0 },
-                { 0, 0, -1, 0 },
-                { 0, 1, 0, 0 },
+                { 0, 0, 1, 0 },
+                { 0, -1, 0, 0 },
                 { 0, 0, 0, 1 }
             };
 
@@ -1280,58 +1287,52 @@ namespace RS5_Extractor
                 int endtri = BLKS.Data.GetInt32(texofs + 140);
                 Texture texture = Texture.GetTexture(texname);
 
-                /*
-                if (!(texname.ToUpper().StartsWith("TEX\\CX") ||
-                      texname.ToUpper().StartsWith("TEX\\LX") ||
-                      texname.ToUpper().StartsWith("TEX\\SPECIAL") ||
-                      texname.ToUpper().StartsWith("TEX\\CCX")))
+                Textures.Add(texsym, texture);
+
+                int startvtx = Vertices.Count;
+                for (int vtxnum = firstvtx; vtxnum < endvtx; vtxnum++)
                 {
-                 */
-                    Textures.Add(texsym, texture);
-
-                    int startvtx = Vertices.Count;
-                    for (int vtxnum = firstvtx; vtxnum < endvtx; vtxnum++)
+                    int vtxofs = vtxnum * 32;
+                    Vertices.Add(new Vertex
                     {
-                        int vtxofs = vtxnum * 32;
-                        Vertices.Add(new Vertex
+                        Position = roottransform * new Vector4
                         {
-                            Position = new Point3D
-                            {
-                                X = VTXS.Data.GetSingle(vtxofs + 0),
-                                Z = VTXS.Data.GetSingle(vtxofs + 4),
-                                Y = -VTXS.Data.GetSingle(vtxofs + 8)
-                            },
-                            TexCoord = new TextureCoordinate
-                            {
-                                U = VTXS.Data.GetSingle(vtxofs + 12),
-                                V = -VTXS.Data.GetSingle(vtxofs + 16),
-                                Texture = texture
-                            },
-                            Normal = new Point3D
-                            {
-                                X = (VTXS.Data[vtxofs + 22] - 0x80) / 127.0F,
-                                Z = (VTXS.Data[vtxofs + 21] - 0x80) / 127.0F,
-                                Y = -(VTXS.Data[vtxofs + 20] - 0x80) / 127.0F
-                            },
-                            JointInfluence = (new int[] { 0, 1, 2, 3 }).Select(i => new JointInfluence { JointIndex = VTXS.Data[vtxofs + 24 + i], Influence = VTXS.Data[vtxofs + 28 + i] / 255.0F }).Where(j => j.Influence != 0).ToArray()
-                        });
-                    }
-
-                    for (int trinum = firsttri; trinum < endtri - 2; trinum += 3)
-                    {
-                        int triofs = trinum * 4;
-                        int a = INDS.Data.GetInt32(triofs + 0) - firstvtx + startvtx;
-                        int b = INDS.Data.GetInt32(triofs + 4) - firstvtx + startvtx;
-                        int c = INDS.Data.GetInt32(triofs + 8) - firstvtx + startvtx;
-                        Triangles.Add(new Triangle
+                            X = VTXS.Data.GetSingle(vtxofs + 0),
+                            Y = VTXS.Data.GetSingle(vtxofs + 4),
+                            Z = VTXS.Data.GetSingle(vtxofs + 8),
+                            W = 1.0
+                        },
+                        TexCoord = new TextureCoordinate
                         {
-                            A = Vertices[a],
-                            B = Vertices[b],
-                            C = Vertices[c],
+                            U = VTXS.Data.GetSingle(vtxofs + 12),
+                            V = -VTXS.Data.GetSingle(vtxofs + 16),
                             Texture = texture
-                        });
-                    }
-                //}
+                        },
+                        Normal = roottransform * new Vector4
+                        {
+                            X = (VTXS.Data[vtxofs + 22] - 0x80) / 127.0,
+                            Y = (VTXS.Data[vtxofs + 21] - 0x80) / 127.0,
+                            Z = (VTXS.Data[vtxofs + 20] - 0x80) / 127.0,
+                            W = 0.0
+                        }.Normalize(),
+                        JointInfluence = (new int[] { 0, 1, 2, 3 }).Select(i => new JointInfluence { JointIndex = VTXS.Data[vtxofs + 24 + i], Influence = VTXS.Data[vtxofs + 28 + i] / 255.0F }).Where(j => j.Influence != 0).ToArray()
+                    });
+                }
+
+                for (int trinum = firsttri; trinum < endtri - 2; trinum += 3)
+                {
+                    int triofs = trinum * 4;
+                    int a = INDS.Data.GetInt32(triofs + 0) - firstvtx + startvtx;
+                    int b = INDS.Data.GetInt32(triofs + 4) - firstvtx + startvtx;
+                    int c = INDS.Data.GetInt32(triofs + 8) - firstvtx + startvtx;
+                    Triangles.Add(new Triangle
+                    {
+                        A = Vertices[a],
+                        B = Vertices[b],
+                        C = Vertices[c],
+                        Texture = texture
+                    });
+                }
             }
 
             if (JNTS != null)
