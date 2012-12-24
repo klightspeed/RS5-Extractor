@@ -49,6 +49,7 @@
   <ItemGroup>
     <Compile Include="AnimationClip.cs" />
     <Compile Include="AnimationSequence.cs" />
+    <Compile Include="Collada.cs" />
     <Compile Include="DotNetZip\CommonSrc\CRC32.cs" />
     <Compile Include="DotNetZip\Zlib\Deflate.cs" />
     <Compile Include="DotNetZip\Zlib\DeflateStream.cs" />

@@ -49,24 +49,6 @@ namespace RS5_Extractor
             _AddPos = 4;
         }
 
-        public override int GetHashCode()
-        {
-            return X.GetHashCode() ^ (Y.GetHashCode() >> 4) ^ (Z.GetHashCode() >> 8);
-        }
-
-        public override bool Equals(object obj)
-        {
-            if (obj is Vector4)
-            {
-                Vector4 val = (Vector4)obj;
-                return val.X == X && val.Y == Y && val.Z == Z;
-            }
-            else
-            {
-                return false;
-            }
-        }
-
         public bool EtaEqual(Vector4 a, double eta)
         {
             double[,] vals = new double[,] { { X, a.X }, {Y, a.Y}, {Z, a.Z} };
@@ -79,6 +61,16 @@ namespace RS5_Extractor
             }
 
             return true;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return base.Equals(obj);
+        }
+
+        public override int GetHashCode()
+        {
+            return base.GetHashCode();
         }
 
         public static bool operator ==(Vector4 a, Vector4 b)

@@ -325,18 +325,15 @@ namespace RS5_Extractor
             return GetEnumerator();
         }
 
-        IEnumerator<double> IEnumerable<double>.GetEnumerator()
+        public IEnumerator<double> GetEnumerator()
         {
-            foreach (double[] vals in this)
+            for (int i = 0; i < 16; i++)
             {
-                foreach (double val in vals)
-                {
-                    yield return val;
-                }
+                yield return this[i];
             }
         }
 
-        public IEnumerator<double[]> GetEnumerator()
+        IEnumerator<double[]> IEnumerable<double[]>.GetEnumerator()
         {
             for (int i = 0; i < 4; i++)
             {

@@ -164,11 +164,11 @@ namespace RS5_Extractor
             foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in main_rs5.Where(d => d.Value.Type == "IMDL"))
             {
                 ImmobileModel model = new ImmobileModel(dirent.Value);
-                if (!File.Exists(model.ColladaFilename))
+                if (!File.Exists(model.ColladaMultimeshFilename))
                 {
                     Console.WriteLine("Saving immobile model {0}", dirent.Key);
-                    model.Save();
                     model.SaveUnanimated();
+                    model.SaveMultimesh();
                 }
             }
 
@@ -176,7 +176,7 @@ namespace RS5_Extractor
             foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in main_rs5.Where(d => d.Value.Type == "AMDL"))
             {
                 AnimatedModel model = new AnimatedModel(dirent.Value);
-                if (!File.Exists(model.ColladaFilename))
+                if (!File.Exists(model.ColladaMultimeshFilename))
                 {
                     Console.WriteLine("Saving animated model {0}", dirent.Key);
                     if (!model.HasGeometry)
@@ -185,8 +185,6 @@ namespace RS5_Extractor
                     }
                     else
                     {
-
-                        model.Save();
                         model.SaveUnanimated();
 
                         if (model.HasSkeleton && model.IsAnimated)
@@ -207,6 +205,8 @@ namespace RS5_Extractor
                                 Console.WriteLine("  model clip start and end frames not in environment");
                             }
                         }
+
+                        model.SaveMultimesh();
                     }
                 }
             }
