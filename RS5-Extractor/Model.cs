@@ -362,66 +362,6 @@ namespace RS5_Extractor
                 { 0, 0, 0, 1 }
             };
 
-            for (int texnum = 0; texnum < BLKS.Data.Count / 144; texnum++)
-            {
-                int texofs = texnum * 144;
-                string texsym = String.Format("texture{0}", texnum);
-                string texname = BLKS.Data.GetString(texofs, 128);
-                int firstvtx = BLKS.Data.GetInt32(texofs + 128);
-                int endvtx = BLKS.Data.GetInt32(texofs + 132);
-                int firsttri = BLKS.Data.GetInt32(texofs + 136);
-                int endtri = BLKS.Data.GetInt32(texofs + 140);
-                Texture texture = Texture.GetTexture(texname);
-
-                Textures.Add(texsym, texture);
-
-                int startvtx = Vertices.Count;
-                for (int vtxnum = firstvtx; vtxnum < endvtx; vtxnum++)
-                {
-                    int vtxofs = vtxnum * 32;
-                    Vertices.Add(new Vertex
-                    {
-                        Position = roottransform * new Vector4
-                        {
-                            X = VTXS.Data.GetSingle(vtxofs + 0),
-                            Y = VTXS.Data.GetSingle(vtxofs + 4),
-                            Z = VTXS.Data.GetSingle(vtxofs + 8),
-                            W = 1.0
-                        },
-                        TexCoord = new TextureCoordinate
-                        {
-                            U = VTXS.Data.GetSingle(vtxofs + 12),
-                            V = -VTXS.Data.GetSingle(vtxofs + 16),
-                            Texture = texture
-                        },
-                        Normal = roottransform * new Vector4
-                        {
-                            X = (VTXS.Data[vtxofs + 22] - 0x80) / 127.0,
-                            Y = (VTXS.Data[vtxofs + 21] - 0x80) / 127.0,
-                            Z = (VTXS.Data[vtxofs + 20] - 0x80) / 127.0,
-                            W = 0.0
-                        }.Normalize(),
-                        JointInfluence = (new int[] { 0, 1, 2, 3 }).Select(i => new JointInfluence { JointIndex = VTXS.Data[vtxofs + 24 + i], Influence = VTXS.Data[vtxofs + 28 + i] / 255.0F }).Where(j => j.Influence != 0).ToArray()
-                    });
-                }
-
-                for (int trinum = firsttri; trinum < endtri - 2; trinum += 3)
-                {
-                    int triofs = trinum * 4;
-                    int a = INDS.Data.GetInt32(triofs + 0) - firstvtx + startvtx;
-                    int b = INDS.Data.GetInt32(triofs + 4) - firstvtx + startvtx;
-                    int c = INDS.Data.GetInt32(triofs + 8) - firstvtx + startvtx;
-                    Triangles.Add(new Triangle
-                    {
-                        A = Vertices[a],
-                        B = Vertices[b],
-                        C = Vertices[c],
-                        Texture = texture,
-                        TextureSymbol = texsym
-                    });
-                }
-            }
-
             if (JNTS != null)
             {
                 for (int jntnum = 0; jntnum < JNTS.Data.Count / 196; jntnum++)
@@ -467,7 +407,7 @@ namespace RS5_Extractor
                 if (FRMS != null && FRMS.Data != null)
                 {
                     Joint[] joints = Joints.Values.ToArray();
-                    
+
                     for (int jntnum = 0; jntnum < joints.Length; jntnum++)
                     {
                         AnimationSequence anim = new AnimationSequence();
@@ -481,7 +421,7 @@ namespace RS5_Extractor
                                 { FRMS.Data.GetSingle(frameofs +  8), FRMS.Data.GetSingle(frameofs + 24), FRMS.Data.GetSingle(frameofs + 40), FRMS.Data.GetSingle(frameofs + 56) },
                                 { FRMS.Data.GetSingle(frameofs + 12), FRMS.Data.GetSingle(frameofs + 28), FRMS.Data.GetSingle(frameofs + 44), FRMS.Data.GetSingle(frameofs + 60) }
                             };
-                            
+
                             if (joints[jntnum].ParentNum == -1)
                             {
                                 transform = roottransform * transform;
@@ -493,6 +433,95 @@ namespace RS5_Extractor
                     }
                 }
             }
+
+            for (int texnum = 0; texnum < BLKS.Data.Count / 144; texnum++)
+            {
+                int texofs = texnum * 144;
+                string texsym = String.Format("texture{0}", texnum);
+                string texname = BLKS.Data.GetString(texofs, 128);
+                int firstvtx = BLKS.Data.GetInt32(texofs + 128);
+                int endvtx = BLKS.Data.GetInt32(texofs + 132);
+                int firsttri = BLKS.Data.GetInt32(texofs + 136);
+                int endtri = BLKS.Data.GetInt32(texofs + 140);
+                Texture texture = Texture.GetTexture(texname);
+
+                Textures.Add(texsym, texture);
+
+                int startvtx = Vertices.Count;
+                for (int vtxnum = firstvtx; vtxnum < endvtx; vtxnum++)
+                {
+                    int vtxofs = vtxnum * 32;
+                    Vertex vertex = new Vertex
+                    {
+                        Position = roottransform * new Vector4
+                        {
+                            X = VTXS.Data.GetSingle(vtxofs + 0),
+                            Y = VTXS.Data.GetSingle(vtxofs + 4),
+                            Z = VTXS.Data.GetSingle(vtxofs + 8),
+                            W = 1.0
+                        },
+                        TexCoord = new TextureCoordinate
+                        {
+                            U = VTXS.Data.GetSingle(vtxofs + 12),
+                            V = -VTXS.Data.GetSingle(vtxofs + 16),
+                            Texture = texture
+                        },
+                        Normal = roottransform * new Vector4
+                        {
+                            X = (VTXS.Data[vtxofs + 22] - 0x80) / 127.0,
+                            Y = (VTXS.Data[vtxofs + 21] - 0x80) / 127.0,
+                            Z = (VTXS.Data[vtxofs + 20] - 0x80) / 127.0,
+                            W = 0.0
+                        }.Normalize()
+                    };
+
+                    if (Joints.Count != 0)
+                    {
+                        List<JointInfluence> influences = new List<JointInfluence>();
+
+                        for (int i = 0; i < 4; i++)
+                        {
+                            float influence = VTXS.Data[vtxofs + 28 + i] / 255.0F;
+
+                            if (influence != 0)
+                            {
+                                JointInfluence jntinfluence = new JointInfluence
+                                {
+                                    JointSymbol = String.Format("joint{0}", VTXS.Data[vtxofs + 24 + i]),
+                                    Influence = influence
+                                };
+
+                                if (Joints.ContainsKey(jntinfluence.JointSymbol))
+                                {
+                                    jntinfluence.Joint = Joints[jntinfluence.JointSymbol];
+                                    influences.Add(jntinfluence);
+                                }
+                            }
+                        }
+
+                        vertex.JointInfluence = influences.ToArray();
+                    }
+
+                    Vertices.Add(vertex);
+                }
+
+                for (int trinum = firsttri; trinum < endtri - 2; trinum += 3)
+                {
+                    int triofs = trinum * 4;
+                    int a = INDS.Data.GetInt32(triofs + 0) - firstvtx + startvtx;
+                    int b = INDS.Data.GetInt32(triofs + 4) - firstvtx + startvtx;
+                    int c = INDS.Data.GetInt32(triofs + 8) - firstvtx + startvtx;
+                    Triangles.Add(new Triangle
+                    {
+                        A = Vertices[a],
+                        B = Vertices[b],
+                        C = Vertices[c],
+                        Texture = texture,
+                        TextureSymbol = texsym
+                    });
+                }
+            }
+
         }
     }
 }

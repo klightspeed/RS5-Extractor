@@ -19,7 +19,7 @@ namespace RS5_Extractor
                 new XAttribute("id", seqid),
                 new XAttribute("name", seqname),
                 new XElement(ns + "source",
-                    new XAttribute("id", seqname + "_time"),
+                    new XAttribute("id", seqid + "_time"),
                     new XElement(ns + "float_array",
                         new XAttribute("id", seqid + "_time_array"),
                         new XAttribute("count", seq.Frames.Count),
@@ -84,25 +84,10 @@ namespace RS5_Extractor
             return new XElement(ns + "animation", sequences.Select(kvp => Animation(animationname, skeletonname, kvp.Key, kvp.Value, startframe, numframes, framerate)));
         }
 
-        protected static IEnumerable<Joint> EnumerateJoints(Joint joint)
+        protected static XNode SkinController(string geometryname, string skeletonname, string skinname, List<Vertex> vertices, Dictionary<string, Joint> joints)
         {
-            yield return joint;
-
-            if (joint.Children != null)
-            {
-                foreach (Joint child in joint.Children)
-                {
-                    foreach (Joint descendent in EnumerateJoints(child))
-                    {
-                        yield return descendent;
-                    }
-                }
-            }
-        }
-
-        protected static XNode SkinController(string geometryname, string skeletonname, string skinname, List<Vertex> vertices, Joint rootjoint)
-        {
-            List<Joint> joints = EnumerateJoints(rootjoint).ToList();
+            List<string> jntsyms = joints.Keys.ToList();
+            Dictionary<string, int> jntrevindex = jntsyms.Select((s, i) => new KeyValuePair<string, int>(s, i)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
             return new XElement(ns + "controller",
                 new XAttribute("id", skinname),
@@ -115,7 +100,7 @@ namespace RS5_Extractor
                         new XElement(ns + "IDREF_array",
                             new XAttribute("id", skinname + "_jnt_array"),
                             new XAttribute("count", joints.Count.ToString()),
-                            String.Join(" ", joints.Select(j => skeletonname + "_" + j.Symbol))
+                            String.Join(" ", joints.Select(kvp => skeletonname + "_" + kvp.Key))
                         ),
                         new XElement(ns + "technique_common",
                             new XElement(ns + "accessor",
@@ -129,7 +114,7 @@ namespace RS5_Extractor
                             )
                         )
                     ),
-                    Source(skinname + "_bnd", joints.Select(j => j.ReverseBindingMatrix), joints.Count),
+                    Source(skinname + "_bnd", joints.Select(kvp => kvp.Value.ReverseBindingMatrix), joints.Count),
                     new XElement(ns + "source",
                         new XAttribute("id", skinname + "_wgt"),
                         new XElement(ns + "float_array",
@@ -175,7 +160,7 @@ namespace RS5_Extractor
                             String.Join(" ", vertices.Select(v => v.JointInfluence.Length))
                         ),
                         new XElement(ns + "v",
-                            String.Join(" ", vertices.SelectMany(v => v.JointInfluence.Select(j => String.Format("{0,3} {1,3}  ", j.JointIndex, (int)((j.Influence * 255.0) + 0.25)))))
+                            String.Join("\n", vertices.Select(v => String.Join(" ",v.JointInfluence.Select(j => String.Format("{0,3} {1,3}  ", jntrevindex[j.JointSymbol], (int)((j.Influence * 255.0) + 0.25))))))
                         )
                     )
                 )
@@ -264,7 +249,9 @@ namespace RS5_Extractor
                 new XElement(ns + "float_array",
                     new XAttribute("id", sourcename + "_array"),
                     new XAttribute("count", count * 16),
-                    String.Join(" ", matrices.SelectMany(m => Enumerable.Range(0, 16).Select(i => String.Format("{0,8:F5}", m[i]))))
+                    "\n",
+                    String.Join("\n", matrices.Select(m => String.Join(" ", Enumerable.Range(0, 16).Select(i => String.Format("{0,8:F5}", m[i]))))),
+                    "\n"
                 ),
                 new XElement(ns + "technique_common",
                     new XElement(ns + "accessor",
@@ -287,7 +274,9 @@ namespace RS5_Extractor
                 new XElement(ns + "float_array",
                     new XAttribute("id", sourcename + "_array"),
                     new XAttribute("count", count * 3),
-                    String.Join(" ",vectors.Select(v => String.Format("{0,12:F6} {1,12:F6} {2,12:F6} ", v.X, v.Y, v.Z)))
+                    "\n",
+                    String.Join("\n",vectors.Select(v => String.Format("{0,12:F6} {1,12:F6} {2,12:F6}", v.X, v.Y, v.Z))),
+                    "\n"
                 ),
                 new XElement(ns + "technique_common",
                     new XElement(ns + "accessor",
@@ -319,7 +308,9 @@ namespace RS5_Extractor
                 new XElement(ns + "float_array",
                     new XAttribute("id", sourcename + "_array"),
                     new XAttribute("count", count * 2),
-                    String.Join(" ", texcoords.Select(t => String.Format("{0,8:F5} {1,8:F5}", t.U, t.V)))
+                    "\n",
+                    String.Join("\n", texcoords.Select(t => String.Format("{0,8:F5} {1,8:F5}", t.U, t.V))),
+                    "\n"
                 ),
                 new XElement(ns + "technique_common",
                     new XElement(ns + "accessor",
@@ -551,7 +542,7 @@ namespace RS5_Extractor
 
                 if (model.RootJoint != null)
                 {
-                    controllers.Add(SkinController("model_mesh", "model_skel", "model_skin", vtxlist, model.RootJoint));
+                    controllers.Add(SkinController("model_mesh", "model_skel", "model_skin", vtxlist, model.Joints));
                     scenenodes.Add(SkinControllerInstance("model", "model_skin", "model_skel", texlist, texsyms));
                     scenenodes.Add(Skeleton("model_skel", model.RootJoint, Matrix4.Identity));
                     if (model.Animations != null)
