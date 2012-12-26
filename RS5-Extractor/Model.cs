@@ -302,21 +302,21 @@ namespace RS5_Extractor
                             Y = (VTXL.Data[vtxofs + 13] - 0x80) / 127.0,
                             Z = (VTXL.Data[vtxofs + 12] - 0x80) / 127.0,
                             W = 0.0
-                        }.Normalize(),
+                        },
                         Tangent = roottransform * new Vector4
                         {
                             X = (VTXL.Data[vtxofs + 18] - 0x80) / 127.0,
                             Y = (VTXL.Data[vtxofs + 17] - 0x80) / 127.0,
                             Z = (VTXL.Data[vtxofs + 16] - 0x80) / 127.0,
                             W = 0.0
-                        }.Normalize(),
+                        },
                         Binormal = roottransform * new Vector4
                         {
                             X = (VTXL.Data[vtxofs + 22] - 0x80) / 127.0,
                             Y = (VTXL.Data[vtxofs + 21] - 0x80) / 127.0,
                             Z = (VTXL.Data[vtxofs + 20] - 0x80) / 127.0,
                             W = 0.0
-                        }.Normalize(),
+                        },
                         ExtraData = VTXL.Data.GetBytes(vtxofs + 32, 4)
                     });
                 }
@@ -357,8 +357,8 @@ namespace RS5_Extractor
 
             Matrix4 roottransform = new Matrix4
             {
-                { -1, 0, 0, 0 },
-                { 0, 0, 1, 0 },
+                { 1, 0, 0, 0 },
+                { 0, 0, -1, 0 },
                 { 0, 1, 0, 0 },
                 { 0, 0, 0, 1 }
             };
@@ -474,7 +474,7 @@ namespace RS5_Extractor
                             Y = (VTXS.Data[vtxofs + 21] - 0x80) / 127.0,
                             Z = (VTXS.Data[vtxofs + 20] - 0x80) / 127.0,
                             W = 0.0
-                        }.Normalize()
+                        }
                     };
 
                     List<JointInfluence> influences = new List<JointInfluence>();

@@ -8,9 +8,19 @@ namespace RS5_Extractor
 {
     public class Collada
     {
+        protected class IDREF
+        {
+            public string ID;
+        }
+
         protected static XNamespace ns = "http://www.collada.org/2005/11/COLLADASchema";
 
-        protected static XNode Animation(string animationname, string skeletonname, string seqname, AnimationSequence sequence, int startframe, int numframes, float framerate)
+        protected static string GetString(Matrix4 matrix)
+        {
+            return String.Join(" ", Enumerable.Range(0, 16).Select(i => String.Format("{0,9:F6}", matrix[i])));
+        }
+        
+        protected static XNode Animation(string animationname, string skeletonname, string seqname, AnimationSequence sequence, int startframe, int numframes, double framerate)
         {
             string seqid = animationname + "_" + seqname;
             AnimationSequence seq = sequence.Trim(startframe, numframes);
@@ -18,63 +28,18 @@ namespace RS5_Extractor
             return new XElement(ns + "animation",
                 new XAttribute("id", seqid),
                 new XAttribute("name", seqname),
-                new XElement(ns + "source",
-                    new XAttribute("id", seqid + "_time"),
-                    new XElement(ns + "float_array",
-                        new XAttribute("id", seqid + "_time_array"),
-                        new XAttribute("count", seq.Frames.Count),
-                        String.Join(" ", seq.Frames.Keys.Select(k => String.Format("{0,7:F3}", k / framerate)))
-                    ),
-                    new XElement(ns + "technique_common",
-                        new XElement(ns + "accessor",
-                            new XAttribute("source", "#" + seqid + "_time_array"),
-                            new XAttribute("count", seq.Frames.Count),
-                            new XAttribute("stride", 1),
-                            new XElement(ns + "param",
-                                new XAttribute("name", "TIME"),
-                                new XAttribute("type", "float")
-                            )
-                        )
-                    )
-                ),
+                Source(seqid + "_time", seq.Frames.Keys.Select(k => k / framerate), seq.Frames.Count, "TIME"),
                 Source(seqid + "_out_xfrm", seq.Frames.Values, seq.Frames.Count),
-                new XElement(ns + "source",
-                    new XAttribute("id", seqid + "_interp"),
-                    new XElement(ns + "Name_array",
-                        new XAttribute("id", seqid + "_interp_array"),
-                        new XAttribute("count", seq.Frames.Count),
-                        String.Join(" ", Enumerable.Range(0, seq.Frames.Count).Select(i => "LINEAR"))
-                    ),
-                    new XElement(ns + "technique_common",
-                        new XElement(ns + "accessor",
-                            new XAttribute("source", "#" + seqid + "_interp_array"),
-                            new XAttribute("count", seq.Frames.Count),
-                            new XAttribute("stride", 1),
-                            new XElement(ns + "param",
-                                new XAttribute("name", "INTERPOLATION"),
-                                new XAttribute("type", "name")
-                            )
-                        )
-                    )
-                ),
+                Source(seqid + "_interp", seq.Frames.Select(kvp => "LINEAR"), seq.Frames.Count, "INTERPOLATION"),
                 new XElement(ns + "sampler",
                     new XAttribute("id", seqid + "_xfrm"),
-                    new XElement(ns + "input",
-                        new XAttribute("semantic", "INPUT"),
-                        new XAttribute("source", "#" + seqid + "_time")
-                    ),
-                    new XElement(ns + "input",
-                        new XAttribute("semantic", "OUTPUT"),
-                        new XAttribute("source", "#" + seqid + "_out_xfrm")
-                    ),
-                    new XElement(ns + "input",
-                        new XAttribute("semantic", "INTERPOLATION"),
-                        new XAttribute("source", "#" + seqid + "_interp")
-                    )
+                    Input(seqid + "_time", "INPUT", null, null),
+                    Input(seqid + "_out_xfrm", "OUTPUT", null, null),
+                    Input(seqid + "_interp", "INTERPOLATION", null, null)
                 ),
                 new XElement(ns + "channel",
                     new XAttribute("source", "#" + seqid + "_xfrm"),
-                    new XAttribute("target", skeletonname + "_" + seqname + "/transform.MATRIX")
+                    new XAttribute("target", skeletonname + "_" + seqname + "/transform")
                 )
             );
         }
@@ -94,74 +59,19 @@ namespace RS5_Extractor
                 new XAttribute("name", skinname),
                 new XElement(ns + "skin",
                     new XAttribute("source", "#" + geometryname),
-                    new XElement(ns + "bind_shape_matrix", "1 0 0 0  0 1 0 0  0 0 1 0  0 0 0 1"),
-                    new XElement(ns + "source",
-                        new XAttribute("id", skinname + "_jnt"),
-                        new XElement(ns + "IDREF_array",
-                            new XAttribute("id", skinname + "_jnt_array"),
-                            new XAttribute("count", joints.Count.ToString()),
-                            String.Join(" ", joints.Select(kvp => skeletonname + "_" + kvp.Key))
-                        ),
-                        new XElement(ns + "technique_common",
-                            new XElement(ns + "accessor",
-                                new XAttribute("source", "#" + skinname + "_jnt_array"),
-                                new XAttribute("count", joints.Count),
-                                new XAttribute("stride", 1),
-                                new XElement(ns + "param",
-                                    new XAttribute("name", "JOINT"),
-                                    new XAttribute("type", "IDREF")
-                                )
-                            )
-                        )
-                    ),
+                    new XElement(ns + "bind_shape_matrix", GetString(Matrix4.Identity)),
+                    Source(skinname + "_jnt", joints.Select(kvp => new IDREF { ID = skeletonname + "_" + kvp.Key }), joints.Count, "JOINT"),
                     Source(skinname + "_bnd", joints.Select(kvp => kvp.Value.ReverseBindingMatrix), joints.Count),
-                    new XElement(ns + "source",
-                        new XAttribute("id", skinname + "_wgt"),
-                        new XElement(ns + "float_array",
-                            new XAttribute("id", skinname + "_wgt_array"),
-                            new XAttribute("count", 256),
-                            String.Join(" ", Enumerable.Range(0, 256).Select(v => String.Format("{0,5:F3}", v / 255.0)))
-                        ),
-                        new XElement(ns + "technique_common",
-                            new XElement(ns + "accessor",
-                                new XAttribute("source", "#" + skinname + "_wgt_array"),
-                                new XAttribute("count", 256),
-                                new XAttribute("stride", 1),
-                                new XElement(ns + "param",
-                                    new XAttribute("name", "WEIGHT"),
-                                    new XAttribute("type", "float")
-                                )
-                            )
-                        )
-                    ),
+                    Source(skinname + "_wgt", Enumerable.Range(0, 256).Select(v => v / 255.0), 256, "WEIGHT"),
                     new XElement(ns + "joints",
-                        new XElement(ns + "input",
-                            new XAttribute("semantic", "JOINT"),
-                            new XAttribute("source", "#" + skinname + "_jnt")
-                        ),
-                        new XElement(ns + "input",
-                            new XAttribute("semantic", "INV_BIND_MATRIX"),
-                            new XAttribute("source", "#" + skinname + "_bnd")
-                        )
+                        Input(skinname + "_jnt", "JOINT", null, null),
+                        Input(skinname + "_bnd", "INV_BIND_MATRIX", null, null)
                     ),
                     new XElement(ns + "vertex_weights",
                         new XAttribute("count", vertices.Count()),
-                        new XElement(ns + "input",
-                            new XAttribute("offset", 0),
-                            new XAttribute("semantic", "JOINT"),
-                            new XAttribute("source", "#" + skinname + "_jnt")
-                        ),
-                        new XElement(ns + "input",
-                            new XAttribute("offset", 1),
-                            new XAttribute("semantic", "WEIGHT"),
-                            new XAttribute("source", "#" + skinname + "_wgt")
-                        ),
-                        new XElement(ns + "vcount",
-                            String.Join(" ", vertices.Select(v => v.JointInfluence.Length))
-                        ),
-                        new XElement(ns + "v",
-                            String.Join("\n", vertices.Select(v => String.Join(" ",v.JointInfluence.Select(j => String.Format("{0,3} {1,3}  ", jntrevindex[j.JointSymbol], (int)((j.Influence * 255.0) + 0.25))))))
-                        )
+                        Input(skinname + "_jnt", "JOINT", 0, null),
+                        Input(skinname + "_wgt", "WEIGHT", 1, null),
+                        ValueList(vertices.Select(v => v.JointInfluence.Select(j => new int[] { jntrevindex[j.JointSymbol], (int)((j.Influence * 255.0) + 0.25) })))
                     )
                 )
             );
@@ -176,7 +86,7 @@ namespace RS5_Extractor
                 new XAttribute("type", "JOINT"),
                 new XElement(ns + "matrix",
                     new XAttribute("sid", "transform"),
-                    String.Join(" ", Enumerable.Range(0, 16).Select(i => String.Format("{0,8:F5}", joint.InitialPose[i])))
+                    GetString(joint.InitialPose)
                 ),
                 joint.Children.Select(j => Skeleton(skeletonname, j, joint.ReverseBindingMatrix))
             );
@@ -236,10 +146,97 @@ namespace RS5_Extractor
                 new XAttribute("id", modelname),
                 new XElement(ns + "instance_controller",
                     new XAttribute("url", "#" + skinname),
-                    new XElement(ns + "skeleton", "#" + skeletonname),
+                    new XElement(ns + "skeleton", "#" + skeletonname + "_joint0"),
                     new XElement(ns + "bind_material",
                         new XElement(ns + "technique_common",
                             texsyms.Select((sym, i) => InstanceMaterial(i, sym, textures[sym]))
+                        )
+                    )
+                )
+            );
+        }
+
+        protected static IEnumerable<XNode> ValueList(IEnumerable<IEnumerable<int[]>> values)
+        {
+            List<int> vcount = new List<int>();
+            List<List<int[]>> v = new List<List<int[]>>();
+            foreach (IEnumerable<int[]> vals in values)
+            {
+                List<int[]> vlist = vals.ToList();
+                v.Add(vlist);
+                vcount.Add(vlist.Count());
+            }
+            yield return new XElement(ns + "vcount", String.Join(" ", vcount));
+            yield return new XElement(ns + "v",
+                "\n",
+                String.Join("\n", v.Select(vlist => String.Join("  ", vlist.Select(vals => String.Join(" ", vals))))),
+                "\n"
+            );
+        }
+
+        protected static XNode Source(string sourcename, IEnumerable<string> values, int count, string paramname)
+        {
+            return new XElement(ns + "source",
+                new XAttribute("id", sourcename),
+                new XElement(ns + "Name_array",
+                    new XAttribute("id", sourcename + "_array"),
+                    new XAttribute("count", count),
+                    String.Join(" ", values)
+                ),
+                new XElement(ns + "technique_common",
+                    new XElement(ns + "accessor",
+                        new XAttribute("source", "#" + sourcename + "_array"),
+                        new XAttribute("count", count),
+                        new XAttribute("stride", 1),
+                        new XElement(ns + "param",
+                            new XAttribute("name", paramname),
+                            new XAttribute("type", "Name")
+                        )
+                    )
+                )
+            );
+        }
+
+        protected static XNode Source(string sourcename, IEnumerable<IDREF> values, int count, string paramname)
+        {
+            return new XElement(ns + "source",
+                new XAttribute("id", sourcename),
+                new XElement(ns + "IDREF_array",
+                    new XAttribute("id", sourcename + "_array"),
+                    new XAttribute("count", count),
+                    String.Join(" ", values.Select(v => v.ID))
+                ),
+                new XElement(ns + "technique_common",
+                    new XElement(ns + "accessor",
+                        new XAttribute("source", "#" + sourcename + "_array"),
+                        new XAttribute("count", count),
+                        new XAttribute("stride", 1),
+                        new XElement(ns + "param",
+                            new XAttribute("name", paramname),
+                            new XAttribute("type", "IDREF")
+                        )
+                    )
+                )
+            );
+        }
+
+        protected static XNode Source(string sourcename, IEnumerable<double> values, int count, string paramname)
+        {
+            return new XElement(ns + "source",
+                new XAttribute("id", sourcename),
+                new XElement(ns + "float_array",
+                    new XAttribute("id", sourcename + "_array"),
+                    new XAttribute("count", count),
+                    String.Join(" ", values.Select(v => String.Format("{0,8:F5}", v)))
+                ),
+                new XElement(ns + "technique_common",
+                    new XElement(ns + "accessor",
+                        new XAttribute("source", "#" + sourcename + "_array"),
+                        new XAttribute("count", count),
+                        new XAttribute("stride", 1),
+                        new XElement(ns + "param",
+                            new XAttribute("name", paramname),
+                            new XAttribute("type", "float")
                         )
                     )
                 )
@@ -254,7 +251,7 @@ namespace RS5_Extractor
                     new XAttribute("id", sourcename + "_array"),
                     new XAttribute("count", count * 16),
                     "\n",
-                    String.Join("\n", matrices.Select(m => String.Join(" ", Enumerable.Range(0, 16).Select(i => String.Format("{0,8:F5}", m[i]))))),
+                    String.Join("\n", matrices.Select(m => GetString(m))),
                     "\n"
                 ),
                 new XElement(ns + "technique_common",
@@ -279,7 +276,7 @@ namespace RS5_Extractor
                     new XAttribute("id", sourcename + "_array"),
                     new XAttribute("count", count * 3),
                     "\n",
-                    String.Join("\n",vectors.Select(v => String.Format("{0,12:F6} {1,12:F6} {2,12:F6}", v.X, v.Y, v.Z))),
+                    String.Join("\n",vectors.Select(v => String.Format("{0,9:F6} {1,9:F6} {2,9:F6}", v.X, v.Y, v.Z))),
                     "\n"
                 ),
                 new XElement(ns + "technique_common",
@@ -313,7 +310,7 @@ namespace RS5_Extractor
                     new XAttribute("id", sourcename + "_array"),
                     new XAttribute("count", count * 2),
                     "\n",
-                    String.Join("\n", texcoords.Select(t => String.Format("{0,8:F5} {1,8:F5}", t.U, t.V))),
+                    String.Join("\n", texcoords.Select(t => String.Format("{0,9:F6} {1,9:F6}", t.U, t.V))),
                     "\n"
                 ),
                 new XElement(ns + "technique_common",
@@ -332,6 +329,16 @@ namespace RS5_Extractor
                         )
                     )
                 )
+            );
+        }
+
+        protected static XNode Input(string sourcename, string semantic, int? offset, int? set)
+        {
+            return new XElement(ns + "input",
+                new XAttribute("source", "#" + sourcename),
+                new XAttribute("semantic", semantic),
+                offset == null ? null : new XAttribute("offset", offset),
+                set == null ? null : new XAttribute("set", set)
             );
         }
 
@@ -368,85 +375,34 @@ namespace RS5_Extractor
                 }
             }
 
-            List<Vector4> positions = new List<Vector4>();
-            List<TextureCoordinate> texcoords = new List<TextureCoordinate>();
-            List<Vector4> normals = new List<Vector4>();
-            List<Vector4> tangents = new List<Vector4>();
-            List<Vector4> binormals = new List<Vector4>();
-            int count = 0;
-            bool hasnormals = vertices[0].Normal != Vector4.Zero;
-            bool hastangents = vertices[0].Tangent != Vector4.Zero;
-            bool hasbinormals = vertices[0].Binormal != Vector4.Zero;
-
-            foreach (Vertex vertex in vertices)
-            {
-                positions.Add(vertex.Position);
-                texcoords.Add(vertex.TexCoord);
-                if (hasnormals) normals.Add(vertex.Normal);
-                if (hastangents) tangents.Add(vertex.Tangent);
-                if (hasbinormals) binormals.Add(vertex.Binormal);
-                count++;
-            }
-
-            XNode positionxml = Source(geometryname + "_pos", positions, count);
-            XNode texcoordxml = Source(geometryname + "_tex", texcoords, count);
-            XNode normalxml = hasnormals ? Source(geometryname + "_normal", normals, count) : null;
-            XNode tangentxml = hastangents ? Source(geometryname + "_tangent", tangents, count) : null;
-            XNode binormalxml = hasbinormals ? Source(geometryname + "_binormal", binormals, count) : null;
-
-            List<XNode> trianglexml = new List<XNode>();
-            foreach (KeyValuePair<string, List<Triangle>> trilist_kvp in trilists)
-            {
-                trianglexml.Add(
-                    new XElement(ns + "triangles",
-                        new XAttribute("count", trilist_kvp.Value.Count),
-                        new XAttribute("material", trilist_kvp.Key + "_lnk"),
-                        new XElement(ns + "input",
-                            new XAttribute("offset", 0),
-                            new XAttribute("semantic", "VERTEX"),
-                            new XAttribute("source", "#" + geometryname + "_vtx")
-                        ),
-                        new XElement(ns + "input",
-                            new XAttribute("offset", 1),
-                            new XAttribute("semantic", "TEXCOORD"),
-                            new XAttribute("source", "#" + geometryname + "_tex"),
-                            new XAttribute("set", String.Format("{0}", texrevindex[trilist_kvp.Key]))
-                        ),
-                        new XElement(ns + "p",
-                            String.Join(" ", trilist_kvp.Value.SelectMany(t => new Vertex[] { t.A, t.B, t.C }).Select(v => String.Format("{0} {0}", vtxrevindex[v.Index])))
-                        )
-                    )
-                );
-            }
-
             return new XElement(ns + "geometry",
                 new XAttribute("id", geometryname),
                 new XElement(ns + "mesh",
-                    positionxml,
-                    texcoordxml,
-                    normalxml,
-                    tangentxml,
-                    binormalxml,
+                    Source(geometryname + "_pos", vertices.Select(v => v.Position), vertices.Count),
+                    Source(geometryname + "_tex", vertices.Select(v => v.TexCoord), vertices.Count),
+                    vertices[0].Normal != Vector4.Zero ? Source(geometryname + "_normal", vertices.Select(v => v.Normal), vertices.Count) : null,
+                    vertices[0].Tangent != Vector4.Zero ? Source(geometryname + "_tangent", vertices.Select(v => v.Tangent), vertices.Count) : null,
+                    vertices[0].Binormal != Vector4.Zero ? Source(geometryname + "_binormal", vertices.Select(v => v.Binormal), vertices.Count) : null,
                     new XElement(ns + "vertices",
                         new XAttribute("id", geometryname + "_vtx"),
-                        new XElement(ns + "input",
-                            new XAttribute("semantic", "POSITION"),
-                            new XAttribute("source", "#" + geometryname + "_pos")
-                        ),
-                        hasnormals ? new XElement(ns + "input",
-                            new XAttribute("semantic", "NORMAL"),
-                            new XAttribute("source", "#" + geometryname + "_normal")
-                        ) : null,
-                        hastangents ? new XElement(ns + "input",
-                            new XAttribute("semantic", "TANGENT"),
-                            new XAttribute("source", "#" + geometryname + "_tangent")
-                        ) : null,
-                        hasbinormals ? new XElement(ns + "input",
-                            new XAttribute("semantic", "BINORMAL"),
-                            new XAttribute("source", "#" + geometryname + "_binormal")
-                        ) : null
+                        Input(geometryname + "_pos", "POSITION", null, null),
+                        vertices[0].Normal != Vector4.Zero ? Input(geometryname + "_normal", "NORMAL", null, null) : null,
+                        vertices[0].Tangent != Vector4.Zero ? Input(geometryname + "_tangent", "TANGENT", null, null) : null,
+                        vertices[0].Binormal != Vector4.Zero ? Input(geometryname + "_binormal", "BINORMAL", null, null) : null
                     ),
-                    trianglexml
+                    trilists.Select(trilist_kvp =>
+                        new XElement(ns + "triangles",
+                            new XAttribute("count", trilist_kvp.Value.Count),
+                            new XAttribute("material", trilist_kvp.Key + "_lnk"),
+                            Input(geometryname + "_vtx", "VERTEX", 0, null),
+                            Input(geometryname + "_tex", "TEXCOORD", 1, texrevindex[trilist_kvp.Key]),
+                            new XElement(ns + "p",
+                                "\n",
+                                String.Join("\n", trilist_kvp.Value.Select(t => String.Join("  ", new Vertex[] { t.A, t.B, t.C }.Select(v => String.Format("{0} {0}", vtxrevindex[v.Index]))))),
+                                "\n"
+                            )
+                        )
+                    )
                 )
             );
         }
@@ -609,10 +565,6 @@ namespace RS5_Extractor
                         ),
                         new XElement(ns + "created", model.CreatTime.ToString("O")),
                         new XElement(ns + "modified", model.ModTime.ToString("O")),
-                        new XElement(ns + "unit",
-                            new XAttribute("meter", "0.01"),
-                            new XAttribute("name", "centimeter")
-                        ),
                         new XElement(ns + "up_axis", "Z_UP")
                     ),
                     new XElement(ns + "library_images", model.Textures.Select(kvp => Image(kvp.Key, kvp.Value, model.Name))),
