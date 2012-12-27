@@ -5,12 +5,53 @@ using System.Linq;
 using System.Text;
 using System.Dynamic;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
 namespace RS5_Extractor
 {
     public class RS5Environment
     {
         public dynamic Data { get; protected set; }
+
+        public XElement ToXML()
+        {
+            return ToXML(Data);
+        }
+
+        protected XElement ToXML(object data)
+        {
+            if (data is int)
+            {
+                return new XElement("int", data);
+            }
+            else if (data is float || data is double)
+            {
+                return new XElement("float", data);
+            }
+            else if (data is string)
+            {
+                return new XElement("string", data);
+            }
+            else if (data is IDictionary<string, object>)
+            {
+                return new XElement("dictionary",
+                    ((IDictionary<string, object>)data).Select(kvp => new XElement("dictionaryentry",
+                        new XAttribute("key", kvp.Key),
+                        ToXML(kvp.Value)
+                    ))
+                );
+            }
+            else if (data is IEnumerable)
+            {
+                return new XElement("list",
+                    ((IEnumerable)data).Cast<object>().Select(v => ToXML(v))
+                );
+            }
+            else
+            {
+                return new XElement("object", data);
+            }
+        }
 
         protected Dictionary<string, dynamic> ProcessKeyValuePairs(ByteSubArray data, List<string> path)
         {

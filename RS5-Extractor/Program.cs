@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.IO;
 using System.Xml;
+using System.Xml.Linq;
 
 namespace RS5_Extractor
 {
@@ -31,7 +32,8 @@ namespace RS5_Extractor
         private static Dictionary<string, List<AnimationClip>> ProcessEnvironmentAnimations(RS5Environment environ)
         {
             Dictionary<string, List<AnimationClip>> animclips = new Dictionary<string, List<AnimationClip>>(StringComparer.InvariantCultureIgnoreCase);
-            
+
+            #region animals
             foreach (KeyValuePair<string, dynamic> animal_kvp in environ.Data["animals"])
             {
                 string key = animal_kvp.Key;
@@ -63,7 +65,9 @@ namespace RS5_Extractor
                     animclips[modelname].Add(new AnimationClip { ModelName = modelname, Name = animname, StartFrame = startframe, NumFrames = endframe - startframe, FrameRate = framerate });
                 }
             }
+            #endregion
 
+            #region creature movements
             foreach (KeyValuePair<string, dynamic> movement_kvp in environ.Data["creature"]["navigation"]["MOVEMENTS"])
             {
                 string animname = movement_kvp.Key;
@@ -84,7 +88,9 @@ namespace RS5_Extractor
                     }
                 }
             }
+            #endregion
 
+            #region hand animations
             foreach (KeyValuePair<string, dynamic> handanim_kvp in environ.Data["player"]["hand_animations"])
             {
                 string animname = handanim_kvp.Key;
@@ -104,7 +110,9 @@ namespace RS5_Extractor
                     }
                 }
             }
+            #endregion
 
+            #region hand animations with game objects
             foreach (KeyValuePair<string, dynamic> obj_kvp in environ.Data["game_objects"])
             {
                 string animname = obj_kvp.Key;
@@ -130,24 +138,54 @@ namespace RS5_Extractor
                     }
                 }
             }
+            #endregion
 
             return animclips;
         }
 
-        private static void Main(string[] args)
+        private static RS5Directory OpenRS5File(string filename)
         {
-            Stream main_filestrm = File.Open("main.rs5", FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            Console.Write("Processing main.rs5 central directory ... ");
-            RS5Directory main_rs5 = ProcessRS5File(main_filestrm);
-            Console.WriteLine("Done");
-            Console.Write("Processing environment.rs5 ... ");
-            Stream environ_filestrm = File.Open("environment.rs5", FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            RS5Directory environ_rs5 = ProcessRS5File(environ_filestrm);
-            RS5Chunk environ_chunk = environ_rs5["environment"].Data;
-            RS5Environment environ = new RS5Environment(environ_chunk.Chunks["DATA"].Data);
-            Dictionary<string, List<AnimationClip>> animclips = ProcessEnvironmentAnimations(environ);
+            string filepath = filename;
+            if (!File.Exists(filepath))
+            {
+                string exepath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().CodeBase);
+                filepath = exepath + Path.DirectorySeparatorChar + filename;
+
+                if (!File.Exists(filepath))
+                {
+
+                    try
+                    {
+                        using (Microsoft.Win32.RegistryKey steamkey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("Software\\Valve\\Steam"))
+                        {
+                            string steampath = steamkey.GetValue("SteamPath").ToString();
+                            string miasmatadir = steampath + Path.DirectorySeparatorChar + "steamapps" + Path.DirectorySeparatorChar + "common" + Path.DirectorySeparatorChar + "Miasmata";
+                            filepath = miasmatadir + Path.DirectorySeparatorChar + filename;
+
+                            if (!File.Exists(filepath))
+                            {
+                                throw new FileNotFoundException();
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        Console.WriteLine("Steam doesn't appear to be installed");
+                        throw new FileNotFoundException();
+                    }
+                }
+            }
+
+            Console.WriteLine("Using {0} file from {1}", filename, filepath);
+            Console.Write("Processing {0} central directory ... ", filename);
+            RS5Directory rs5 = ProcessRS5File(File.Open(filepath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite));
             Console.WriteLine("Done");
 
+            return rs5;
+        }
+        
+        private static void WriteRS5Contents(RS5Directory main_rs5, Dictionary<string, List<AnimationClip>> animclips)
+        {
             Console.WriteLine("Processing Textures ... ");
             foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in main_rs5.Where(d => d.Value.Type == "IMAG"))
             {
@@ -156,7 +194,8 @@ namespace RS5_Extractor
                 if (!File.Exists(texture.PNGFilename) && !File.Exists(texture.DDSFilename))
                 {
                     Console.WriteLine("Saving texture {0}", dirent.Key);
-                    texture.Save();
+                    texture.SavePNG();
+                    texture.SaveDDS();
                 }
             }
 
@@ -166,9 +205,18 @@ namespace RS5_Extractor
                 ImmobileModel model = new ImmobileModel(dirent.Value);
                 if (!File.Exists(model.ColladaMultimeshFilename))
                 {
-                    Console.WriteLine("Saving immobile model {0}", dirent.Key);
-                    model.SaveUnanimated();
-                    model.SaveMultimesh();
+                    Console.WriteLine("Saving immobile model {0} ... ", dirent.Key);
+
+                    if (!model.HasGeometry)
+                    {
+                        Console.WriteLine("    no geometry");
+                    }
+                    else
+                    {
+                        Console.WriteLine("    {0} textures, {1} vertices, {2} triangles", model.Mesh.Textures.Count, model.Mesh.Vertices.Count, model.Mesh.Triangles.Count);
+                        model.SaveUnanimated();
+                        model.SaveMultimesh();
+                    }
                 }
             }
 
@@ -178,26 +226,38 @@ namespace RS5_Extractor
                 AnimatedModel model = new AnimatedModel(dirent.Value);
                 if (!File.Exists(model.ColladaMultimeshFilename))
                 {
-                    Console.WriteLine("Saving animated model {0}", dirent.Key);
+                    Console.WriteLine("Saving animated model {0} ... ", dirent.Key);
+
                     if (!model.HasGeometry)
                     {
-                        Console.WriteLine("Model {0} has no geometry");
+                        Console.WriteLine("    no geometry");
                     }
                     else
                     {
+                        Console.WriteLine("    {0} textures, {1} vertices, {2} triangles, {3} joints, {4} frames", model.Mesh.Textures.Count, model.Mesh.Vertices.Count, model.Mesh.Triangles.Count, model.Joints.Count(), model.NumAnimationFrames);
                         model.SaveUnanimated();
 
                         if (model.HasSkeleton && model.IsAnimated)
                         {
-                            Console.WriteLine("  Saving all animations ({0} frames @ 24 fps)", model.NumAnimationFrames);
-                            model.SaveAnimation("ALL", 0, model.NumAnimationFrames, 24.0F);
+                            Console.WriteLine("  Saving all animations ({0} frames @ 24 fps, {1} keyframes) ... ", model.NumAnimationFrames, model.NumAnimationKeyFrames);
+                            model.SaveAnimation("ALL");
 
                             if (animclips.ContainsKey(model.Name))
                             {
                                 foreach (AnimationClip clip in animclips[model.Name])
                                 {
-                                    Console.WriteLine("  Saving animation {0} ({1} frames @ {2} fps)", clip.Name, clip.NumFrames, clip.FrameRate);
-                                    model.SaveAnimation(clip.Name, clip.StartFrame, clip.NumFrames, clip.FrameRate);
+                                    Console.Write("  Saving animation {0} ({1} frames @ {2} fps, ", clip.Name, clip.NumFrames, clip.FrameRate);
+                                    Model anim = model.GetAnimatedModel(clip.StartFrame, clip.NumFrames, clip.FrameRate);
+
+                                    if (anim.NumAnimationKeyFrames == 0)
+                                    {
+                                        Console.WriteLine("no keyframes)");
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("{0} keyframes)", anim.NumAnimationKeyFrames);
+                                        anim.SaveAnimation(clip.Name);
+                                    }
                                 }
                             }
                             else
@@ -210,6 +270,55 @@ namespace RS5_Extractor
                     }
                 }
             }
+        }
+
+        private static void Main(string[] args)
+        {
+            try
+            {
+                RS5Directory main_rs5 = OpenRS5File("main.rs5");
+                RS5Directory environ_rs5 = OpenRS5File("environment.rs5");
+                Console.Write("Processing environment ... ");
+                RS5Environment environ = new RS5Environment(environ_rs5["environment"].Data.Chunks["DATA"].Data);
+                Dictionary<string, List<AnimationClip>> animclips = ProcessEnvironmentAnimations(environ);
+                Console.WriteLine("Done");
+                XElement environ_xml = environ.ToXML();
+
+                try
+                {
+                    environ_xml.Save("environment.xml");
+                    WriteRS5Contents(main_rs5, animclips);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    System.Reflection.Assembly asm = System.Reflection.Assembly.GetExecutingAssembly();
+                    string exepath = Path.GetDirectoryName(asm.Location);
+                    Console.WriteLine("Unable to write to working directory {0}", Environment.CurrentDirectory);
+                    Console.WriteLine("Do you want to write to the directory the executable is in?");
+                    Console.WriteLine("({0})", exepath);
+                    Console.Write("[y/N] ");
+                    ConsoleKeyInfo keyinfo = Console.ReadKey(false);
+                    Console.WriteLine();
+                    if (keyinfo.KeyChar == 'y' || keyinfo.KeyChar == 'Y')
+                    {
+                        Environment.CurrentDirectory = exepath;
+                        environ_xml.Save("environment.xml");
+                        WriteRS5Contents(main_rs5, animclips);
+                    }
+                }
+            }
+            catch (FileNotFoundException)
+            {
+                Console.WriteLine("Unable to load RS5 files");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("Caught exception: {0}\n\nPlease report this to Ben Peddell <klightspeed@killerwolves.net>", ex.ToString());
+            }
+            
+
+            Console.Error.Write("Press any key to exit");
+            Console.ReadKey(true);
         }
     }
 }

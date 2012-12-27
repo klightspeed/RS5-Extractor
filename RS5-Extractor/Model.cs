@@ -13,76 +13,53 @@ namespace RS5_Extractor
     {
         protected RS5Chunk Chunk;
 
-        private List<Vertex> _Vertices;
-        public List<Vertex> Vertices
+        private Mesh _Mesh;
+        public Mesh Mesh
         {
             get
             {
-                if (_Vertices == null)
+                if (_Mesh == null)
                 {
                     FillModel();
                 }
-                return _Vertices;
+                return _Mesh;
+            }
+            private set
+            {
+                _Mesh = value;
             }
         }
 
-        private List<Triangle> _Triangles;
-        public List<Triangle> Triangles
+        public IEnumerable<Joint> Joints
         {
             get
             {
-                if (_Triangles == null)
-                {
-                    FillModel();
-                }
-                return _Triangles;
+                return RootJoint == null ? new Joint[0] : RootJoint.GetSelfAndDescendents();
             }
         }
 
-        private Dictionary<string,Texture> _Textures;
-        public Dictionary<string,Texture> Textures
+        public IEnumerable<AnimationSequence> Animations
         {
             get
             {
-                if (_Textures == null)
-                {
-                    FillModel();
-                }
-                return _Textures;
+                return Joints.Select(j => j.Animation).Where(a => a != null);
             }
         }
 
-        private Dictionary<string, Joint> _Joints;
-        public Dictionary<string, Joint> Joints
-        {
-            get
-            {
-                if (_Joints == null)
-                {
-                    FillModel();
-                }
-                return _Joints;
-            }
-        }
-
-        private Dictionary<string, AnimationSequence> _Animations;
-        public Dictionary<string, AnimationSequence> Animations
-        {
-            get
-            {
-                if (_Animations == null)
-                {
-                    FillModel();
-                }
-                return _Animations;
-            }
-        }
-
+        private Joint _RootJoint;
         public Joint RootJoint
         {
             get
             {
-                return Joints.Values.Where(j => j.Parent == null).SingleOrDefault();
+                if (_RootJoint == null && _Mesh == null)
+                {
+                    FillModel();
+                }
+                return _RootJoint;
+            }
+            protected set
+            {
+                _RootJoint = value;
             }
         }
 
@@ -91,7 +68,7 @@ namespace RS5_Extractor
         {
             get
             {
-                if (_ExtraData == null)
+                if (_ExtraData == null && _Mesh == null)
                 {
                     FillModel();
                 }
@@ -115,19 +92,80 @@ namespace RS5_Extractor
             this.CreatTime = dirent.ModTime;
         }
 
+        protected Model(Model model)
+        {
+            ExtraData = model.ExtraData;
+            RootJoint = model.RootJoint.Clone();
+            Mesh = model.Mesh.Clone();
+            Chunk = model.Chunk;
+            Name = model.Name;
+            CreatTime = model.CreatTime;
+            ModTime = model.ModTime;
+            NumAnimationFrames = model.NumAnimationFrames;
+        }
+
         public bool IsAnimated
         {
             get
             {
-                return Animations.Count != 0;
+                return Animations.Count() != 0 && NumAnimationFrames != 0;
             }
         }
 
+        private int? _NumAnimationFrames;
         public int NumAnimationFrames
         {
             get
             {
-                return IsAnimated ? Animations.First().Value.Frames.Count : 0;
+                if (_NumAnimationFrames == null && _Mesh == null)
+                {
+                    FillModel();
+                }
+                return _NumAnimationFrames == null ? 0 : (int)_NumAnimationFrames;
+            }
+            protected set
+            {
+                _NumAnimationFrames = value;
+            }
+        }
+
+        private int? _NumJoints;
+        public int NumJoints
+        {
+            get
+            {
+                if (_NumJoints == null && _Mesh == null)
+                {
+                    FillModel();
+                }
+                return _NumJoints == null ? 0 : (int)_NumJoints;
+            }
+            protected set
+            {
+                _NumJoints = value;
+            }
+        }
+
+        private int? _NumAnimationKeyFrames;
+        public int NumAnimationKeyFrames
+        {
+            get
+            {
+                if (_NumAnimationKeyFrames == null)
+                {
+                    
+                    HashSet<int> KeyFrames = new HashSet<int>(Animations.Select(anim => anim.Frames.Keys.Select(k => k)).Aggregate((a, v) => a.Union(v)));
+                    _NumAnimationKeyFrames = KeyFrames.Count();
+                }
+                return (int)_NumAnimationKeyFrames;
+            }
+        }
+
+        public bool IsVisible
+        {
+            get
+            {
+                return Mesh.Textures.Values.Where(t => ExcludeTexturePrefixes.Count(v => t.Name.StartsWith(v)) == 0).Count() != 0;
             }
         }
 
@@ -135,7 +173,7 @@ namespace RS5_Extractor
         {
             get
             {
-                return Textures.Count() > 1;
+                return Mesh.Textures.Count() > 1;
             }
         }
 
@@ -143,7 +181,7 @@ namespace RS5_Extractor
         {
             get
             {
-                return Vertices.Count != 0;
+                return Mesh.Vertices.Count != 0;
             }
         }
 
@@ -151,7 +189,7 @@ namespace RS5_Extractor
         {
             get
             {
-                return HasGeometry && Vertices.First().Normal != Vector4.Zero;
+                return HasGeometry && Mesh.Vertices.First().Normal != Vector4.Zero;
             }
         }
 
@@ -159,7 +197,7 @@ namespace RS5_Extractor
         {
             get
             {
-                return HasGeometry && Vertices.First().Tangent != Vector4.Zero;
+                return HasGeometry && Mesh.Vertices.First().Tangent != Vector4.Zero;
             }
         }
 
@@ -167,7 +205,7 @@ namespace RS5_Extractor
         {
             get
             {
-                return HasGeometry && Vertices.First().Binormal != Vector4.Zero;
+                return HasGeometry && Mesh.Vertices.First().Binormal != Vector4.Zero;
             }
         }
 
@@ -195,7 +233,7 @@ namespace RS5_Extractor
             "TEX\\SPECIAL"
         };
 
-        protected void Save(string filename, bool skin, bool animate, int startframe, int numframes, float framerate)
+        protected void Save(IEnumerable<List<Triangle>> meshes, Joint rootjoint, string filename)
         {
             string dir = Path.GetDirectoryName(filename);
             if (!Directory.Exists(dir))
@@ -203,39 +241,56 @@ namespace RS5_Extractor
                 Directory.CreateDirectory(dir);
             }
 
-            XDocument doc = Collada.Create(this, ExcludeTexturePrefixes, skin, animate, startframe, numframes, framerate);
-            if (doc != null)
-            {
-                doc.Save(filename);
-                File.SetLastWriteTimeUtc(filename, ModTime);
-            }
+            XDocument doc = new Collada(meshes, rootjoint, Name, CreatTime, ModTime);
+            doc.Save(filename);
+            File.SetLastWriteTimeUtc(filename, ModTime);
         }
 
         public void SaveMultimesh()
         {
             string filename = ".\\" + Name + ".multimesh.dae";
-            Save(filename, false, false, 0, 0, 0);
+            Save(GetSubMeshes(), null, filename);
         }
 
-        public void SaveAnimation(string animname, int startframe, int numframes, float framerate)
+        public void SaveAnimation(string animname)
         {
             string filename = ".\\" + Name + ".anim." + animname + ".dae";
-            Save(filename, true, true, startframe, numframes, framerate);
+            Save(GetFiltered(), RootJoint, filename);
         }
 
         public void SaveUnanimated()
         {
             string filename = ".\\" + Name + ".noanim.dae";
-            Save(filename, true, false, 0, 0, 0);
+            Save(GetFiltered(), RootJoint == null ? null : RootJoint.WithoutAnimation(), filename);
+        }
+
+        protected abstract Model Clone();
+
+        public Model GetAnimatedModel(int startframe, int numframes, float framerate)
+        {
+            Model model = this.Clone();
+            foreach (Joint joint in model.RootJoint.GetSelfAndDescendents())
+            {
+                joint.Animation = joint.Animation.Trim(startframe, numframes, framerate);
+            }
+            model.NumAnimationFrames = numframes;
+            return model;
+        }
+
+        public IEnumerable<List<Triangle>> GetSubMeshes()
+        {
+            return Mesh.Textures.Select(tex => Mesh.Triangles.Where(tri => tri.TextureSymbol == tex.Key).ToList());
+        }
+
+        public IEnumerable<List<Triangle>> GetFiltered()
+        {
+            return new[] { Mesh.Triangles.Where(t => ExcludeTexturePrefixes.Where(x => t.Texture.Name.StartsWith(x, StringComparison.InvariantCultureIgnoreCase)).Count() == 0).ToList() };
         }
 
         private void FillModel()
         {
-            _Vertices = new List<Vertex>();
-            _Triangles = new List<Triangle>();
-            _Textures = new Dictionary<string, Texture>();
-            _Joints = new Dictionary<string, Joint>();
-            _Animations = new Dictionary<string, AnimationSequence>();
+            _Mesh = new Mesh();
+            _NumAnimationFrames = 0;
             FillModelImpl();
         }
 
@@ -247,6 +302,16 @@ namespace RS5_Extractor
         public ImmobileModel(RS5DirectoryEntry dirent)
             : base(dirent)
         {
+        }
+
+        protected ImmobileModel(ImmobileModel model)
+            : base(model)
+        {
+        }
+
+        protected override Model Clone()
+        {
+            return new ImmobileModel(this);
         }
 
         protected override void FillModelImpl()
@@ -274,13 +339,13 @@ namespace RS5_Extractor
                 int numtri = BHDR.Data.GetInt32(texofs + 140);
                 Texture texture = Texture.GetTexture(texname);
 
-                Textures.Add(texsym, texture);
+                Mesh.Textures.Add(texsym, texture);
 
-                int startvtx = Vertices.Count;
+                int startvtx = Mesh.Vertices.Count;
                 for (int vtxnum = firstvtx; vtxnum < firstvtx + numvtx; vtxnum++)
                 {
                     int vtxofs = vtxnum * 36;
-                    Vertices.Add(new Vertex
+                    Mesh.Vertices.Add(new Vertex
                     {
                         Index = vtxnum,
                         Position = roottransform * new Vector4
@@ -327,11 +392,11 @@ namespace RS5_Extractor
                     int a = TRIL.Data.GetInt32(triofs + 0) + startvtx;
                     int b = TRIL.Data.GetInt32(triofs + 4) + startvtx;
                     int c = TRIL.Data.GetInt32(triofs + 8) + startvtx;
-                    Triangles.Add(new Triangle
+                    Mesh.Triangles.Add(new Triangle
                     {
-                        A = Vertices[a],
-                        B = Vertices[b],
-                        C = Vertices[c],
+                        A = Mesh.Vertices[a],
+                        B = Mesh.Vertices[b],
+                        C = Mesh.Vertices[c],
                         Texture = texture,
                         TextureSymbol = texsym
                     });
@@ -345,6 +410,16 @@ namespace RS5_Extractor
         public AnimatedModel(RS5DirectoryEntry dirent)
             : base(dirent)
         {
+        }
+
+        protected AnimatedModel(AnimatedModel model)
+            : base(model)
+        {
+        }
+
+        protected override Model Clone()
+        {
+            return new AnimatedModel(this);
         }
 
         protected override void FillModelImpl()
@@ -363,9 +438,13 @@ namespace RS5_Extractor
                 { 0, 0, 0, 1 }
             };
 
+            List<Joint> joints = new List<Joint>();
+
             if (JNTS != null)
             {
-                for (int jntnum = 0; jntnum < JNTS.Data.Count / 196; jntnum++)
+                NumJoints = JNTS.Data.Count / 196;
+                NumAnimationFrames = (FRMS != null && FRMS.Data != null) ? FRMS.Data.Count / (NumJoints * 64) : 0;
+                for (int jntnum = 0; jntnum < NumJoints; jntnum++)
                 {
                     int jntofs = jntnum * 196;
                     int parent = JNTS.Data.GetInt32(jntofs + 192);
@@ -388,13 +467,43 @@ namespace RS5_Extractor
                         ParentNum = parent,
                         Symbol = jntsym
                     };
-                    Joints.Add(jntsym, joint);
+
+                    if (FRMS != null && FRMS.Data != null)
+                    {
+
+                        AnimationSequence anim = new AnimationSequence();
+                        for (int frameno = 0; frameno < NumAnimationFrames; frameno++)
+                        {
+                            int frameofs = (frameno * NumJoints + jntnum) * 64;
+                            Matrix4 transform = new Matrix4
+                        {
+                            { FRMS.Data.GetSingle(frameofs +  0), FRMS.Data.GetSingle(frameofs + 16), FRMS.Data.GetSingle(frameofs + 32), FRMS.Data.GetSingle(frameofs + 48) },
+                            { FRMS.Data.GetSingle(frameofs +  4), FRMS.Data.GetSingle(frameofs + 20), FRMS.Data.GetSingle(frameofs + 36), FRMS.Data.GetSingle(frameofs + 52) },
+                            { FRMS.Data.GetSingle(frameofs +  8), FRMS.Data.GetSingle(frameofs + 24), FRMS.Data.GetSingle(frameofs + 40), FRMS.Data.GetSingle(frameofs + 56) },
+                            { FRMS.Data.GetSingle(frameofs + 12), FRMS.Data.GetSingle(frameofs + 28), FRMS.Data.GetSingle(frameofs + 44), FRMS.Data.GetSingle(frameofs + 60) }
+                        };
+
+                            if (joint.ParentNum == -1)
+                            {
+                                transform = roottransform * transform;
+                            }
+
+                            anim.Frames.Add(frameno, transform);
+                        }
+                        joint.Animation = anim.Trim(0, anim.Frames.Count, 24.0);
+                    }
+                    else
+                    {
+                        joint.Animation = new AnimationSequence { FrameRate = 24.0, InitialPose = joint.InitialPose, Frames = new SortedDictionary<int, Matrix4>() };
+                    }
+
+                    joints.Add(joint);
                 }
 
-                foreach (Joint joint in Joints.Values)
+                foreach (Joint joint in joints)
                 {
-                    joint.Parent = Joints.Values.Where(j => j.JointNum == joint.ParentNum).FirstOrDefault();
-                    joint.Children = Joints.Values.Where(j => j.ParentNum == joint.JointNum).ToArray();
+                    joint.Parent = joints.Where(j => j.JointNum == joint.ParentNum).FirstOrDefault();
+                    joint.Children = joints.Where(j => j.ParentNum == joint.JointNum).ToArray();
                     if (joint.Parent == null)
                     {
                         joint.InitialPose = 1 / joint.ReverseBindingMatrix;
@@ -405,34 +514,8 @@ namespace RS5_Extractor
                     }
                 }
 
-                if (FRMS != null && FRMS.Data != null)
-                {
-                    Joint[] joints = Joints.Values.ToArray();
+                RootJoint = joints.Where(j => j.Parent == null).Single();
 
-                    for (int jntnum = 0; jntnum < joints.Length; jntnum++)
-                    {
-                        AnimationSequence anim = new AnimationSequence();
-                        for (int frameno = 0; frameno < FRMS.Data.Count / (joints.Length * 64); frameno++)
-                        {
-                            int frameofs = (frameno * Joints.Count + jntnum) * 64;
-                            Matrix4 transform = new Matrix4
-                            {
-                                { FRMS.Data.GetSingle(frameofs +  0), FRMS.Data.GetSingle(frameofs + 16), FRMS.Data.GetSingle(frameofs + 32), FRMS.Data.GetSingle(frameofs + 48) },
-                                { FRMS.Data.GetSingle(frameofs +  4), FRMS.Data.GetSingle(frameofs + 20), FRMS.Data.GetSingle(frameofs + 36), FRMS.Data.GetSingle(frameofs + 52) },
-                                { FRMS.Data.GetSingle(frameofs +  8), FRMS.Data.GetSingle(frameofs + 24), FRMS.Data.GetSingle(frameofs + 40), FRMS.Data.GetSingle(frameofs + 56) },
-                                { FRMS.Data.GetSingle(frameofs + 12), FRMS.Data.GetSingle(frameofs + 28), FRMS.Data.GetSingle(frameofs + 44), FRMS.Data.GetSingle(frameofs + 60) }
-                            };
-
-                            if (joints[jntnum].ParentNum == -1)
-                            {
-                                transform = roottransform * transform;
-                            }
-
-                            anim.Frames.Add(frameno, transform);
-                        }
-                        Animations[joints[jntnum].Symbol] = anim;
-                    }
-                }
             }
 
             for (int texnum = 0; texnum < BLKS.Data.Count / 144; texnum++)
@@ -446,9 +529,9 @@ namespace RS5_Extractor
                 int endtri = BLKS.Data.GetInt32(texofs + 140);
                 Texture texture = Texture.GetTexture(texname);
 
-                Textures.Add(texsym, texture);
+                Mesh.Textures.Add(texsym, texture);
 
-                int startvtx = Vertices.Count;
+                int startvtx = Mesh.Vertices.Count;
                 for (int vtxnum = firstvtx; vtxnum < endvtx; vtxnum++)
                 {
                     int vtxofs = vtxnum * 32;
@@ -479,34 +562,34 @@ namespace RS5_Extractor
 
                     List<JointInfluence> influences = new List<JointInfluence>();
 
-                    if (Joints.Count != 0)
+                    if (joints.Count != 0)
                     {
 
                         for (int i = 0; i < 4; i++)
                         {
-                            float influence = VTXS.Data[vtxofs + 28 + i] / 255.0F;
+                            double influence = VTXS.Data[vtxofs + 28 + i] / 255.0;
 
                             if (influence != 0)
                             {
+                                int jointnum = VTXS.Data[vtxofs + 24 + i];
                                 JointInfluence jntinfluence = new JointInfluence
                                 {
-                                    JointSymbol = String.Format("joint{0}", VTXS.Data[vtxofs + 24 + i]),
+                                    JointSymbol = String.Format("joint{0}", jointnum),
                                     Influence = influence
                                 };
 
-                                if (Joints.ContainsKey(jntinfluence.JointSymbol))
+                                if (jointnum < joints.Count)
                                 {
-                                    jntinfluence.Joint = Joints[jntinfluence.JointSymbol];
+                                    jntinfluence.Joint = joints[jointnum];
                                     influences.Add(jntinfluence);
                                 }
                             }
                         }
-
                     }
 
                     vertex.JointInfluence = influences.ToArray();
 
-                    Vertices.Add(vertex);
+                    Mesh.Vertices.Add(vertex);
                 }
 
                 for (int trinum = firsttri; trinum < endtri - 2; trinum += 3)
@@ -515,11 +598,11 @@ namespace RS5_Extractor
                     int a = INDS.Data.GetInt32(triofs + 0) - firstvtx + startvtx;
                     int b = INDS.Data.GetInt32(triofs + 4) - firstvtx + startvtx;
                     int c = INDS.Data.GetInt32(triofs + 8) - firstvtx + startvtx;
-                    Triangles.Add(new Triangle
+                    Mesh.Triangles.Add(new Triangle
                     {
-                        A = Vertices[a],
-                        B = Vertices[b],
-                        C = Vertices[c],
+                        A = Mesh.Vertices[a],
+                        B = Mesh.Vertices[b],
+                        C = Mesh.Vertices[c],
                         Texture = texture,
                         TextureSymbol = texsym
                     });

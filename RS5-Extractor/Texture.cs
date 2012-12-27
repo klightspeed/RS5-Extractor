@@ -370,7 +370,7 @@ namespace RS5_Extractor
             }
         }
 
-        public void Save()
+        public void SavePNG()
         {
             string dir = Path.GetDirectoryName(PNGFilename);
             if (!Directory.Exists(dir))
@@ -381,13 +381,32 @@ namespace RS5_Extractor
             try
             {
                 Bitmap bmp = GetBitmap();
-                bmp.Save(this.PNGFilename, ImageFormat.Png);
+                using (MemoryStream memstrm = new MemoryStream())
+                {
+                    bmp.Save(memstrm, ImageFormat.Png);
+                    File.WriteAllBytes(PNGFilename, memstrm.ToArray());
+                    File.SetLastWriteTimeUtc(PNGFilename, ModTime);
+                }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                throw;
             }
             catch
             {
-                File.WriteAllBytes(DDSFilename, Data);
-                File.SetLastWriteTimeUtc(DDSFilename, ModTime);
             }
+        }
+
+        public void SaveDDS()
+        {
+            string dir = Path.GetDirectoryName(DDSFilename);
+            if (!Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            File.WriteAllBytes(DDSFilename, Data);
+            File.SetLastWriteTimeUtc(DDSFilename, ModTime);
         }
 
         public static Texture GetTexture(string name)
@@ -409,6 +428,7 @@ namespace RS5_Extractor
         public static void AddTexture(RS5DirectoryEntry dirent)
         {
             Texture texture = GetTexture(dirent.Name);
+            texture.ModTime = dirent.ModTime;
             texture.Chunk = dirent.Data;
         }
 

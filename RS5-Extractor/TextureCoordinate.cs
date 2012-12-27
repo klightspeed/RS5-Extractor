@@ -8,8 +8,8 @@ namespace RS5_Extractor
     public struct TextureCoordinate
     {
         public Texture Texture;
-        public float U;
-        public float V;
+        public double U;
+        public double V;
 
         public override int GetHashCode()
         {

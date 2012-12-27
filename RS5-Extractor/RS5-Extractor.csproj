@@ -64,6 +64,7 @@
     <Compile Include="DotNetZip\Zlib\ZlibConstants.cs" />
     <Compile Include="DotNetZip\Zlib\ZlibStream.cs" />
     <Compile Include="Matrix4.cs" />
+    <Compile Include="Mesh.cs" />
     <Compile Include="RS5Environment.cs" />
     <Compile Include="Joint.cs" />
     <Compile Include="JointInfluence.cs" />
