@@ -41,6 +41,7 @@ namespace RS5_Extractor
         }
 
         public Vector4(double x, double y, double z, double w)
+            : this()
         {
             _AddPos = 4;
             X = x;
