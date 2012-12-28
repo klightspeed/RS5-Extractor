@@ -7,9 +7,7 @@ namespace RS5_Extractor
 {
     public class JointInfluence
     {
-        public int JointIndex;
-        public string JointSymbol;
-        public Joint Joint;
-        public double Influence;
+        public Joint Joint { get; set; }
+        public double Influence { get; set; }
     }
 }

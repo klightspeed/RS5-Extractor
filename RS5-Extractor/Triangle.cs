@@ -8,11 +8,10 @@ namespace RS5_Extractor
 {
     public class Triangle : IEnumerable, IEnumerable<Vertex>
     {
-        public Vertex A;
-        public Vertex B;
-        public Vertex C;
-        public Texture Texture;
-        public string TextureSymbol;
+        public Vertex A { get; set; }
+        public Vertex B { get; set; }
+        public Vertex C { get; set; }
+        public Texture Texture { get; set; }
         private int _AddPos;
 
         public Vertex this[int i]

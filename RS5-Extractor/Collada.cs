@@ -8,37 +8,27 @@ namespace RS5_Extractor
 {
     public class Collada : XDocument
     {
-        protected static XNamespace ns = "http://www.collada.org/2005/11/COLLADASchema";
-
-        protected static string GetString(Matrix4 matrix)
-        {
-            return String.Join(" ", Enumerable.Range(0, 16).Select(i => String.Format("{0,9:F6}", matrix[i])));
-        }
-
-        protected static IEnumerable<XNode> ValueList(IEnumerable<IEnumerable<int[]>> values)
-        {
-            List<int> vcount = new List<int>();
-            List<List<int[]>> v = new List<List<int[]>>();
-            foreach (IEnumerable<int[]> vals in values)
-            {
-                List<int[]> vlist = vals.ToList();
-                v.Add(vlist);
-                vcount.Add(vlist.Count());
-            }
-            yield return new XElement(ns + "vcount", String.Join(" ", vcount));
-            yield return new XElement(ns + "v",
-                "\n",
-                String.Join("\n", v.Select(vlist => String.Join("  ", vlist.Select(vals => String.Join(" ", vals))))),
-                "\n"
-            );
-        }
-
         protected class IDREF
         {
-            public string ID;
+            public string ID { get; set; }
+
+            public IDREF(string id)
+            {
+                this.ID = id;
+            }
         }
 
-        protected class XElementWithID : XElement
+        protected interface IXElementWithSID
+        {
+            string SID { get; }
+        }
+
+        protected interface IInstanceable
+        {
+            InstanceBase GetInstance();
+        }
+
+        protected abstract class XElementWithID : XElement
         {
             public string ID { get; protected set; }
 
@@ -55,14 +45,12 @@ namespace RS5_Extractor
             }
         }
 
-        protected interface IXElementWithSID
+        protected abstract class InstanceBase : XElement
         {
-            string SID { get; }
-        }
-
-        protected interface IInstanceable
-        {
-            InstanceBase GetInstance();
+            protected InstanceBase(XName name)
+                : base(name)
+            {
+            }
         }
 
         protected class Animation : XElementWithID
@@ -92,12 +80,12 @@ namespace RS5_Extractor
             {
             }
 
-            public Animation(string animationname, Skeleton skeleton)
-                : this(animationname + "_" + skeleton.Joint.Symbol)
+            public Animation(string animationname, Bone bone)
+                : this(animationname + "_" + bone.Joint.Symbol)
             {
-                Source insrc = new Source(ID + "_time", "INPUT", "TIME", skeleton.Joint.Animation.Frames.Keys.Select(k => k / skeleton.Joint.Animation.FrameRate), skeleton.Joint.Animation.Frames.Count);
-                Source outsrc = new Source(ID + "_out_xfrm", "OUTPUT", "TRANSFORM", skeleton.Joint.Animation.Frames.Values, skeleton.Joint.Animation.Frames.Count);
-                Source intsrc = new Source(ID + "_interp", "INTERPOLATION", "INTERPOLATION", skeleton.Joint.Animation.Frames.Select(kvp => "LINEAR"), skeleton.Joint.Animation.Frames.Count);
+                Source insrc = new Source(ID + "_time", "INPUT", "TIME", bone.Joint.Animation.Frames.Keys.Select(k => k / bone.Joint.Animation.FrameRate), bone.Joint.Animation.Frames.Count);
+                Source outsrc = new Source(ID + "_out_xfrm", "OUTPUT", "TRANSFORM", bone.Joint.Animation.Frames.Values, bone.Joint.Animation.Frames.Count);
+                Source intsrc = new Source(ID + "_interp", "INTERPOLATION", "INTERPOLATION", bone.Joint.Animation.Frames.Select(kvp => "LINEAR"), bone.Joint.Animation.Frames.Count);
                 Sampler sampler = new Sampler(ID + "_xfrm", insrc, outsrc, intsrc);
 
                 this.Add(
@@ -106,12 +94,12 @@ namespace RS5_Extractor
                     outsrc,
                     intsrc,
                     sampler,
-                    new Channel(sampler, skeleton.ID + "/" + skeleton.Transform.SID)
+                    new Channel(sampler, bone.ID + "/" + bone.Transform.SID)
                 );
             }
 
             public Animation(Skeleton skeleton) 
-                : this(skeleton.ID + "_anim")
+                : this(skeleton.SkeletonName + "_anim")
             {
                 this.Add(skeleton.GetAnimatedBones().Select(b => new Animation(ID, b)));
             }
@@ -119,9 +107,8 @@ namespace RS5_Extractor
 
         protected class SkinController : XElementWithID, IInstanceable
         {
-            protected string Symbol;
-            protected Skeleton Skeleton;
-            protected Geometry Geometry;
+            protected Skeleton Skeleton { get; set; }
+            protected Geometry Geometry { get; set; }
 
             protected class Instance : InstanceBase
             {
@@ -141,10 +128,10 @@ namespace RS5_Extractor
             {
                 this.Skeleton = skeleton;
                 this.Geometry = geometry;
-                List<Skeleton> bones = skeleton.GetSelfAndDescendents().ToList();
+                List<Bone> bones = skeleton.GetSelfAndDescendents().ToList();
                 List<string> jntsyms = bones.Select(b => b.Joint.Symbol).ToList();
                 Dictionary<string, int> jntrevindex = jntsyms.Select((s, i) => new KeyValuePair<string, int>(s, i)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-                Source jointsrc = new Source(ID + "_jnt", "JOINT", "JOINT", bones.Select(b => new IDREF { ID = b.ID }), bones.Count);
+                Source jointsrc = new Source(ID + "_jnt", "JOINT", "JOINT", bones.Select(b => new IDREF(b.ID)), bones.Count);
                 Source bindsrc = new Source(ID + "_bnd", "INV_BIND_MATRIX", "TRANSFORM", bones.Select(b => b.Joint.ReverseBindingMatrix), bones.Count);
                 Source weightsrc = new Source(ID + "_wgt", "WEIGHT", "WEIGHT", Enumerable.Range(0, 256).Select(v => v / 255.0), 256);
 
@@ -164,7 +151,7 @@ namespace RS5_Extractor
                             new XAttribute("count", geometry.VertexList.Count()),
                             jointsrc.GetInput(0),
                             weightsrc.GetInput(1),
-                            ValueList(geometry.VertexList.Select(v => v.JointInfluence.Select(j => new int[] { jntrevindex[j.JointSymbol], (int)((j.Influence * 255.0) + 0.25) })))
+                            ValueList(geometry.VertexList.Select(v => v.JointInfluence.Select(j => new int[] { jntrevindex[j.Joint.Symbol], (int)((j.Influence * 255.0) + 0.25) })))
                         )
                     )
                 );
@@ -217,30 +204,23 @@ namespace RS5_Extractor
             }
         }
 
-        protected class Skeleton : Node, IXElementWithSID
+        protected class Bone : Node, IXElementWithSID
         {
+
             public string SID { get; protected set; }
             public Joint Joint { get; protected set; }
-            public Skeleton ParentBone { get; protected set; }
-            public Skeleton[] ChildBones { get; protected set; }
+            public Bone[] ChildBones { get; protected set; }
             public Matrix Transform { get; protected set; }
 
-            public Skeleton(string skeletonname, Joint joint)
-                : this(skeletonname, null, joint)
-            {
-            }
-
-            protected Skeleton(string skeletonname, Skeleton parent, Joint joint)
-                : base(skeletonname + "_" + joint.Symbol)
+            protected Bone(string skeletonname, Joint joint, params object[] content)
+                : base(skeletonname + "_" + joint.Symbol, content)
             {
                 this.SID = joint.Symbol;
                 this.Joint = joint;
-                this.ParentBone = parent;
-                this.ChildBones = joint.Children.Select(j => new Skeleton(skeletonname, this, j)).ToArray();
+                this.ChildBones = joint.Children.Select(j => new Bone(skeletonname, j)).ToArray();
                 this.Transform = new Matrix("transform", joint.InitialPose);
 
                 this.Add(
-                    //new XAttribute("name", joint.Name),
                     new XAttribute("sid", SID),
                     new XAttribute("type", "JOINT"),
                     Transform,
@@ -248,7 +228,7 @@ namespace RS5_Extractor
                 );
             }
 
-            public IEnumerable<Skeleton> GetSelfAndDescendents()
+            public IEnumerable<Bone> GetSelfAndDescendents()
             {
                 yield return this;
                 foreach (Skeleton child in ChildBones)
@@ -260,20 +240,23 @@ namespace RS5_Extractor
                 }
             }
 
-            public IEnumerable<Skeleton> GetAnimatedBones()
+            public IEnumerable<Bone> GetAnimatedBones()
             {
                 return GetSelfAndDescendents().Where(b => b.Joint.Animation.Frames.Count != 0);
             }
         }
 
-        protected abstract class InstanceBase : XElement
+        protected class Skeleton : Bone
         {
-            protected InstanceBase(XName name)
-                : base(name)
+            public string SkeletonName { get; protected set; }
+
+            public Skeleton(string skeletonname, Joint joint)
+                : base(skeletonname, joint, new XAttribute("name", skeletonname))
             {
+                this.SkeletonName = skeletonname;
             }
         }
-        
+
         protected class Source : XElementWithID
         {
             protected string Semantic;
@@ -573,7 +556,7 @@ namespace RS5_Extractor
                 Dictionary<string, List<Triangle>> trilists = new Dictionary<string,List<Triangle>>();
                 this.VertexList = new List<Vertex>();
                 this.Materials = new List<Material>();
-                Dictionary<int, int> vtxrevindex = new Dictionary<int, int>();
+                Dictionary<object, int> vtxrevindex = new Dictionary<object, int>();
 
                 foreach (Triangle triangle in triangles)
                 {
@@ -586,9 +569,9 @@ namespace RS5_Extractor
                     trilists[triangle.Texture.Name].Add(triangle);
                     foreach (Vertex vertex in new Vertex[] { triangle.A, triangle.B, triangle.C })
                     {
-                        if (!vtxrevindex.ContainsKey(vertex.Index))
+                        if (!vtxrevindex.ContainsKey(vertex))
                         {
-                            vtxrevindex[vertex.Index] = VertexList.Count;
+                            vtxrevindex[vertex] = VertexList.Count;
                             VertexList.Add(vertex);
                         }
                     }
@@ -617,7 +600,7 @@ namespace RS5_Extractor
                                 TexcoordSource.GetInput(1, m),
                                 new XElement(ns + "p",
                                     "\n",
-                                    String.Join("\n", trilists[m.Effect.Image.Texture.Name].Select(t => String.Join("  ", new Vertex[] { t.A, t.B, t.C }.Select(v => String.Format("{0} {0}", vtxrevindex[v.Index]))))),
+                                    String.Join("\n", trilists[m.Effect.Image.Texture.Name].Select(t => String.Join("  ", new Vertex[] { t.A, t.B, t.C }.Select(v => String.Format("{0} {0}", vtxrevindex[v]))))),
                                     "\n"
                                 )
                             )
@@ -660,7 +643,7 @@ namespace RS5_Extractor
             }
         }
 
-        protected class Effect : XElementWithID
+        protected class Effect : XElementWithID, IInstanceable
         {
             public Image Image { get; protected set; }
 
@@ -817,6 +800,31 @@ namespace RS5_Extractor
             {
                 return new Instance(this, set);
             }
+        }
+
+        protected static XNamespace ns = "http://www.collada.org/2005/11/COLLADASchema";
+
+        protected static string GetString(Matrix4 matrix)
+        {
+            return String.Join(" ", Enumerable.Range(0, 16).Select(i => String.Format("{0,9:F6}", matrix[i])));
+        }
+
+        protected static IEnumerable<XNode> ValueList(IEnumerable<IEnumerable<int[]>> values)
+        {
+            List<int> vcount = new List<int>();
+            List<List<int[]>> v = new List<List<int[]>>();
+            foreach (IEnumerable<int[]> vals in values)
+            {
+                List<int[]> vlist = vals.ToList();
+                v.Add(vlist);
+                vcount.Add(vlist.Count());
+            }
+            yield return new XElement(ns + "vcount", String.Join(" ", vcount));
+            yield return new XElement(ns + "v",
+                "\n",
+                String.Join("\n", v.Select(vlist => String.Join("  ", vlist.Select(vals => String.Join(" ", vals))))),
+                "\n"
+            );
         }
 
         protected string basepath;

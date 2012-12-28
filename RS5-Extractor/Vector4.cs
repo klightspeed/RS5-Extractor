@@ -8,10 +8,10 @@ namespace RS5_Extractor
 {
     public struct Vector4 : IEnumerable, IEnumerable<double>
     {
-        public double X;
-        public double Y;
-        public double Z;
-        public double W;
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Z { get; set; }
+        public double W { get; set; }
         private int _AddPos;
 
         public double this[int i]
@@ -42,11 +42,11 @@ namespace RS5_Extractor
 
         public Vector4(double x, double y, double z, double w)
         {
+            _AddPos = 4;
             X = x;
             Y = y;
             Z = z;
             W = w;
-            _AddPos = 4;
         }
 
         public bool EtaEqual(Vector4 a, double eta)

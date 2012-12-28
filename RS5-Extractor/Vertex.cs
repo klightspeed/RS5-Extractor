@@ -8,13 +8,12 @@ namespace RS5_Extractor
 {
     public class Vertex
     {
-        public int Index;
-        public Vector4 Position;
-        public Vector4 Normal;
-        public Vector4 Tangent;
-        public Vector4 Binormal;
-        public TextureCoordinate TexCoord;
-        public JointInfluence[] JointInfluence;
-        public byte[] ExtraData;
+        public Vector4 Position { get; set; }
+        public Vector4 Normal { get; set; }
+        public Vector4 Tangent { get; set; }
+        public Vector4 Binormal { get; set; }
+        public TextureCoordinate TexCoord { get; set; }
+        public JointInfluence[] JointInfluence { get; set; }
+        public byte[] ExtraData { get; set; }
     }
 }

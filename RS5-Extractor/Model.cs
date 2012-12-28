@@ -279,7 +279,7 @@ namespace RS5_Extractor
 
         public IEnumerable<List<Triangle>> GetSubMeshes()
         {
-            return Mesh.Textures.Select(tex => Mesh.Triangles.Where(tri => tri.TextureSymbol == tex.Key).ToList());
+            return Mesh.Textures.Select(tex => Mesh.Triangles.Where(tri => tri.Texture.Name == tex.Value.Name).ToList());
         }
 
         public IEnumerable<List<Triangle>> GetFiltered()
@@ -347,7 +347,6 @@ namespace RS5_Extractor
                     int vtxofs = vtxnum * 36;
                     Mesh.Vertices.Add(new Vertex
                     {
-                        Index = vtxnum,
                         Position = roottransform * new Vector4
                         {
                             X = VTXL.Data.GetSingle(vtxofs + 0),
@@ -397,8 +396,7 @@ namespace RS5_Extractor
                         A = Mesh.Vertices[a],
                         B = Mesh.Vertices[b],
                         C = Mesh.Vertices[c],
-                        Texture = texture,
-                        TextureSymbol = texsym
+                        Texture = texture
                     });
                 }
             }
@@ -438,12 +436,17 @@ namespace RS5_Extractor
                 { 0, 0, 0, 1 }
             };
 
-            List<Joint> joints = new List<Joint>();
+            Joint[] joints = new Joint[0];
+            NumJoints = 0;
 
             if (JNTS != null)
             {
                 NumJoints = JNTS.Data.Count / 196;
                 NumAnimationFrames = (FRMS != null && FRMS.Data != null) ? FRMS.Data.Count / (NumJoints * 64) : 0;
+                joints = new Joint[NumJoints];
+                int[] parents = new int[NumJoints];
+                int rootjointnum = -1;
+
                 for (int jntnum = 0; jntnum < NumJoints; jntnum++)
                 {
                     int jntofs = jntnum * 196;
@@ -463,10 +466,13 @@ namespace RS5_Extractor
                     {
                         Name = JNTS.Data.GetString(jntofs, 128),
                         ReverseBindingMatrix = revbindmatrix,
-                        JointNum = jntnum,
-                        ParentNum = parent,
                         Symbol = jntsym
                     };
+
+                    if (parent == -1)
+                    {
+                        rootjointnum = jntnum;
+                    }
 
                     if (FRMS != null && FRMS.Data != null)
                     {
@@ -483,7 +489,7 @@ namespace RS5_Extractor
                             { FRMS.Data.GetSingle(frameofs + 12), FRMS.Data.GetSingle(frameofs + 28), FRMS.Data.GetSingle(frameofs + 44), FRMS.Data.GetSingle(frameofs + 60) }
                         };
 
-                            if (joint.ParentNum == -1)
+                            if (parent == -1)
                             {
                                 transform = roottransform * transform;
                             }
@@ -497,25 +503,24 @@ namespace RS5_Extractor
                         joint.Animation = new AnimationSequence { FrameRate = 24.0, InitialPose = joint.InitialPose, Frames = new SortedDictionary<int, Matrix4>() };
                     }
 
-                    joints.Add(joint);
+                    joints[jntnum] = joint;
                 }
 
-                foreach (Joint joint in joints)
+                for (int i = 0; i < joints.Length; i++)
                 {
-                    joint.Parent = joints.Where(j => j.JointNum == joint.ParentNum).FirstOrDefault();
-                    joint.Children = joints.Where(j => j.ParentNum == joint.JointNum).ToArray();
-                    if (joint.Parent == null)
+                    Joint joint = joints[i];
+                    joint.Children = joints.Where((j,n) => parents[n] == i).ToArray();
+                    if (i == rootjointnum)
                     {
                         joint.InitialPose = 1 / joint.ReverseBindingMatrix;
                     }
                     else
                     {
-                        joint.InitialPose = joint.Parent.ReverseBindingMatrix / joint.ReverseBindingMatrix;
+                        joint.InitialPose = joints[parents[i]].ReverseBindingMatrix / joint.ReverseBindingMatrix;
                     }
                 }
 
-                RootJoint = joints.Where(j => j.Parent == null).Single();
-
+                RootJoint = joints[rootjointnum];
             }
 
             for (int texnum = 0; texnum < BLKS.Data.Count / 144; texnum++)
@@ -537,7 +542,6 @@ namespace RS5_Extractor
                     int vtxofs = vtxnum * 32;
                     Vertex vertex = new Vertex
                     {
-                        Index = vtxnum,
                         Position = roottransform * new Vector4
                         {
                             X = VTXS.Data.GetSingle(vtxofs + 0),
@@ -562,27 +566,22 @@ namespace RS5_Extractor
 
                     List<JointInfluence> influences = new List<JointInfluence>();
 
-                    if (joints.Count != 0)
+                    if (NumJoints != 0)
                     {
-
                         for (int i = 0; i < 4; i++)
                         {
                             double influence = VTXS.Data[vtxofs + 28 + i] / 255.0;
+                            int jointnum = VTXS.Data[vtxofs + 24 + i];
 
-                            if (influence != 0)
+                            if (influence != 0 && jointnum < NumJoints)
                             {
-                                int jointnum = VTXS.Data[vtxofs + 24 + i];
                                 JointInfluence jntinfluence = new JointInfluence
                                 {
-                                    JointSymbol = String.Format("joint{0}", jointnum),
+                                    Joint = joints[jointnum],
                                     Influence = influence
                                 };
 
-                                if (jointnum < joints.Count)
-                                {
-                                    jntinfluence.Joint = joints[jointnum];
-                                    influences.Add(jntinfluence);
-                                }
+                                influences.Add(jntinfluence);
                             }
                         }
                     }
@@ -603,8 +602,7 @@ namespace RS5_Extractor
                         A = Mesh.Vertices[a],
                         B = Mesh.Vertices[b],
                         C = Mesh.Vertices[c],
-                        Texture = texture,
-                        TextureSymbol = texsym
+                        Texture = texture
                     });
                 }
             }

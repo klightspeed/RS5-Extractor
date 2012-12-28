@@ -7,26 +7,14 @@ namespace RS5_Extractor
 {
     public class Joint
     {
-        public string Symbol;
-        public string Name;
-        public Matrix4 ReverseBindingMatrix;
-        public Matrix4 InitialPose;
-        public int JointNum;
-        public int ParentNum;
-        public Joint Parent;
-        public Joint[] Children;
-        public AnimationSequence Animation;
+        public string Symbol { get; set; }
+        public string Name { get; set; }
+        public Matrix4 ReverseBindingMatrix { get; set; }
+        public Matrix4 InitialPose { get; set; }
+        public Joint[] Children { get; set; }
+        public AnimationSequence Animation { get; set; }
 
         public Joint Clone()
-        {
-            if (Parent != null)
-            {
-                throw new InvalidOperationException("Cannot clone child joint");
-            }
-            return Clone(null);
-        }
-
-        protected Joint Clone(Joint parent)
         {
             return new Joint
             {
@@ -34,10 +22,7 @@ namespace RS5_Extractor
                 Name = Name,
                 ReverseBindingMatrix = ReverseBindingMatrix,
                 InitialPose = InitialPose,
-                JointNum = JointNum,
-                ParentNum = ParentNum,
-                Parent = parent,
-                Children = Children.Select(j => j.Clone(this)).ToArray(),
+                Children = Children.Select(j => j.Clone()).ToArray(),
                 Animation = Animation.Clone()
             };
         }
@@ -59,25 +44,13 @@ namespace RS5_Extractor
 
         public Joint WithoutAnimation()
         {
-            if (Parent != null)
-            {
-                throw new InvalidOperationException("Cannot clone child joint");
-            }
-            return WithoutAnimation(null);
-        }
-        
-        protected Joint WithoutAnimation(Joint parent)
-        {
             return new Joint
             {
                 Symbol = Symbol,
                 Name = Name,
                 ReverseBindingMatrix = ReverseBindingMatrix,
                 InitialPose = InitialPose,
-                JointNum = JointNum,
-                ParentNum = ParentNum,
-                Parent = parent,
-                Children = Children.Select(j => j.Clone(this)).ToArray(),
+                Children = Children.Select(j => j.Clone()).ToArray(),
                 Animation = Animation.WithoutAnimation()
             };
         }
