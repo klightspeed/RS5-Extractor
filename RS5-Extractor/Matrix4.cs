@@ -6,14 +6,12 @@ using System.Text;
 
 namespace RS5_Extractor
 {
-    public struct Matrix4 : IEnumerable, IEnumerable<double>, IEnumerable<double[]>
+    public struct Matrix4 : IEnumerable, IEnumerable<double>
     {
-        private double v11, v12, v13, v14;
-        private double v21, v22, v23, v24;
-        private double v31, v32, v33, v34;
-        private double v41, v42, v43, v44;
-        private int _AddPos1;
-        private int _AddPos2;
+        private readonly double v11, v12, v13, v14;
+        private readonly double v21, v22, v23, v24;
+        private readonly double v31, v32, v33, v34;
+        private readonly double v41, v42, v43, v44;
 
         public double this[int i]
         {
@@ -37,75 +35,51 @@ namespace RS5_Extractor
                     case 13: return v42;
                     case 14: return v43;
                     case 15: return v44;
-                    default: throw new InvalidProgramException();
-                }
-            }
-            set
-            {
-                switch (i)
-                {
-                    case 0: v11 = value; break;
-                    case 1: v12 = value; break;
-                    case 2: v13 = value; break;
-                    case 3: v14 = value; break;
-                    case 4: v21 = value; break;
-                    case 5: v22 = value; break;
-                    case 6: v23 = value; break;
-                    case 7: v24 = value; break;
-                    case 8: v31 = value; break;
-                    case 9: v32 = value; break;
-                    case 10: v33 = value; break;
-                    case 11: v34 = value; break;
-                    case 12: v41 = value; break;
-                    case 13: v42 = value; break;
-                    case 14: v43 = value; break;
-                    case 15: v44 = value; break;
-                    default: throw new InvalidProgramException();
+                    default: throw new IndexOutOfRangeException();
                 }
             }
         }
 
-        public double this[int j,int i]
+        public double this[int j, int i]
         {
             get
             {
-                if (j < 0 || j >= 4 || i < 0 || i >= 4)
+                if (i < 0 || i >= 4 || j < 0 || j >= 4)
                 {
                     throw new IndexOutOfRangeException();
                 }
                 return this[j * 4 + i];
             }
-            set
-            {
-                if (j < 0 || j >= 4 || i < 0 || i >= 4)
-                {
-                    throw new IndexOutOfRangeException();
-                }
-                this[j * 4 + i] = value;
-            }
         }
 
-        public Matrix4(double[,] array)
-            : this()
+        public Matrix4(IEnumerable<double> vals)
+            : this(vals.ToArray())
         {
-            v11 = array[0, 0];
-            v12 = array[0, 1];
-            v13 = array[0, 2];
-            v14 = array[0, 3];
-            v21 = array[1, 0];
-            v22 = array[1, 1];
-            v23 = array[1, 2];
-            v24 = array[1, 3];
-            v31 = array[2, 0];
-            v32 = array[2, 1];
-            v33 = array[2, 2];
-            v34 = array[2, 3];
-            v41 = array[3, 0];
-            v42 = array[3, 1];
-            v43 = array[3, 2];
-            v44 = array[3, 3];
-            _AddPos1 = 16;
-            _AddPos2 = 4;
+        }
+
+        public Matrix4(params double[] array)
+        {
+            if (array.Length != 16)
+            {
+                throw new ArgumentException();
+            }
+
+            v11 = array[0];
+            v12 = array[1];
+            v13 = array[2];
+            v14 = array[3];
+            v21 = array[4];
+            v22 = array[5];
+            v23 = array[6];
+            v24 = array[7];
+            v31 = array[8];
+            v32 = array[9];
+            v33 = array[10];
+            v34 = array[11];
+            v41 = array[12];
+            v42 = array[13];
+            v43 = array[14];
+            v44 = array[15];
         }
 
         public static Matrix4 operator -(Matrix4 mat)
@@ -115,15 +89,7 @@ namespace RS5_Extractor
         
         public static Matrix4 operator +(Matrix4 mat1, Matrix4 mat2)
         {
-            Matrix4 mat = new Matrix4();
-            for (int j = 0; j < 4; j++)
-            {
-                for (int i = 0; i < 4; i++)
-                {
-                    mat[j, i] = mat1[j, i] + mat2[j, i];
-                }
-            }
-            return mat;
+            return new Matrix4(mat1.Zip(mat2, (a, b) => a + b));
         }
 
         public static Matrix4 operator -(Matrix4 mat1, Matrix4 mat2)
@@ -133,38 +99,17 @@ namespace RS5_Extractor
 
         public static Matrix4 operator *(Matrix4 mat1, Matrix4 mat2)
         {
-            Matrix4 mat = new Matrix4();
-            for (int j = 0; j < 4; j++)
-            {
-                for (int i = 0; i < 4; i++)
-                {
-                    mat[j,i] = mat1[j,0] * mat2[0,i] + mat1[j,1] * mat2[1,i] + mat1[j,2] * mat2[2,i] + mat1[j,3] * mat2[3,i];
-                }
-            }
-            return mat;
+            return new Matrix4(Enumerable.Range(0, 4).SelectMany(j => Enumerable.Range(0, 4).Select(i => mat1[j, 0] * mat2[0, i] + mat1[j, 1] * mat2[1, i] + mat1[j, 2] * mat2[2, i] + mat1[j, 3] * mat2[3, i])));
         }
 
         public static Vector4 operator *(Matrix4 mat, Vector4 inpoint)
         {
-            Vector4 outpoint = new Vector4();
-            for (int i = 0; i < 4; i++)
-            {
-                outpoint[i] = mat[i, 0] * inpoint[0] + mat[i, 1] * inpoint[1] + mat[i, 2] * inpoint[2] + mat[i, 3] * inpoint[3];
-            }
-            return outpoint;
+            return new Vector4(Enumerable.Range(0, 4).Select(i => mat[i, 0] * inpoint[0] + mat[i, 1] * inpoint[1] + mat[i, 2] * inpoint[2] + mat[i, 3] * inpoint[3]));
         }
 
         public static Matrix4 operator *(Matrix4 mat1, double scale)
         {
-            Matrix4 mat = new Matrix4();
-            for (int j = 0; j < 4; j++)
-            {
-                for (int i = 0; i < 4; i++)
-                {
-                    mat[j, i] = mat1[j, i] * scale;
-                }
-            }
-            return mat;
+            return new Matrix4(mat1.Select(v => v * scale));
         }
 
         public static Matrix4 operator *(double scale, Matrix4 mat1)
@@ -193,31 +138,26 @@ namespace RS5_Extractor
             double c1 = a[2, 0] * a[3, 2] - a[3, 0] * a[2, 2];
             double c0 = a[2, 0] * a[3, 1] - a[3, 0] * a[2, 1];
 
-            var invdet = 1.0 / (s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0);
+            var invdet = scale / (s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0);
 
-            Matrix4 b = new Matrix4();
-
-            b[0, 0] = (a[1, 1] * c5 - a[1, 2] * c4 + a[1, 3] * c3) * invdet;
-            b[0, 1] = (-a[0, 1] * c5 + a[0, 2] * c4 - a[0, 3] * c3) * invdet;
-            b[0, 2] = (a[3, 1] * s5 - a[3, 2] * s4 + a[3, 3] * s3) * invdet;
-            b[0, 3] = (-a[2, 1] * s5 + a[2, 2] * s4 - a[2, 3] * s3) * invdet;
-
-            b[1, 0] = (-a[1, 0] * c5 + a[1, 2] * c2 - a[1, 3] * c1) * invdet;
-            b[1, 1] = (a[0, 0] * c5 - a[0, 2] * c2 + a[0, 3] * c1) * invdet;
-            b[1, 2] = (-a[3, 0] * s5 + a[3, 2] * s2 - a[3, 3] * s1) * invdet;
-            b[1, 3] = (a[2, 0] * s5 - a[2, 2] * s2 + a[2, 3] * s1) * invdet;
-
-            b[2, 0] = (a[1, 0] * c4 - a[1, 1] * c2 + a[1, 3] * c0) * invdet;
-            b[2, 1] = (-a[0, 0] * c4 + a[0, 1] * c2 - a[0, 3] * c0) * invdet;
-            b[2, 2] = (a[3, 0] * s4 - a[3, 1] * s2 + a[3, 3] * s0) * invdet;
-            b[2, 3] = (-a[2, 0] * s4 + a[2, 1] * s2 - a[2, 3] * s0) * invdet;
-
-            b[3, 0] = (-a[1, 0] * c3 + a[1, 1] * c1 - a[1, 2] * c0) * invdet;
-            b[3, 1] = (a[0, 0] * c3 - a[0, 1] * c1 + a[0, 2] * c0) * invdet;
-            b[3, 2] = (-a[3, 0] * s3 + a[3, 1] * s1 - a[3, 2] * s0) * invdet;
-            b[3, 3] = (a[2, 0] * s3 - a[2, 1] * s1 + a[2, 2] * s0) * invdet;
-
-            return b * scale;
+            return new Matrix4(
+                (a[1, 1] * c5 - a[1, 2] * c4 + a[1, 3] * c3) * invdet,
+                (-a[0, 1] * c5 + a[0, 2] * c4 - a[0, 3] * c3) * invdet,
+                (a[3, 1] * s5 - a[3, 2] * s4 + a[3, 3] * s3) * invdet,
+                (-a[2, 1] * s5 + a[2, 2] * s4 - a[2, 3] * s3) * invdet,
+                (-a[1, 0] * c5 + a[1, 2] * c2 - a[1, 3] * c1) * invdet,
+                (a[0, 0] * c5 - a[0, 2] * c2 + a[0, 3] * c1) * invdet,
+                (-a[3, 0] * s5 + a[3, 2] * s2 - a[3, 3] * s1) * invdet,
+                (a[2, 0] * s5 - a[2, 2] * s2 + a[2, 3] * s1) * invdet,
+                (a[1, 0] * c4 - a[1, 1] * c2 + a[1, 3] * c0) * invdet,
+                (-a[0, 0] * c4 + a[0, 1] * c2 - a[0, 3] * c0) * invdet,
+                (a[3, 0] * s4 - a[3, 1] * s2 + a[3, 3] * s0) * invdet,
+                (-a[2, 0] * s4 + a[2, 1] * s2 - a[2, 3] * s0) * invdet,
+                (-a[1, 0] * c3 + a[1, 1] * c1 - a[1, 2] * c0) * invdet,
+                (a[0, 0] * c3 - a[0, 1] * c1 + a[0, 2] * c0) * invdet,
+                (-a[3, 0] * s3 + a[3, 1] * s1 - a[3, 2] * s0) * invdet,
+                (a[2, 0] * s3 - a[2, 1] * s1 + a[2, 2] * s0) * invdet
+            );
         }
 
         public static Matrix4 operator /(Matrix4 a, Matrix4 b)
@@ -232,32 +172,19 @@ namespace RS5_Extractor
 
         public bool Equals(Matrix4 mat)
         {
-            for (int j = 0; j < 4; j++)
-            {
-                for (int i = 0; i < 4; i++)
-                {
-                    if (this[j, i] != mat[j, i])
-                    {
-                        return false;
-                    }
-                }
-            }
-            return true;
+            return this.Zip(mat, (a, b) => a == b).All(v => v);
         }
         
         public override bool Equals(object obj)
         {
-            if (obj == null)
+            if (obj != null && obj is Matrix4)
+            {
+                return Equals((Matrix4)obj);
+            }
+            else
             {
                 return false;
             }
-
-            if (!(obj is Matrix4))
-            {
-                return false;
-            }
-
-            return Equals((Matrix4)obj);
         }
 
         public override int GetHashCode()
@@ -282,42 +209,9 @@ namespace RS5_Extractor
             return !(a == b);
         }
 
-        public bool EtaEqual(Matrix4 a, double eta)
+        public bool EtaEqual(Matrix4 mat, double eta)
         {
-            for (int j = 0; j < 4; j++)
-            {
-                for (int i = 0; i < 4; i++)
-                {
-                    if ((this[j, i] < a[j, i] * (1.0 - eta)) || (a[j, i] < this[j, i] * (1.0 - eta)))
-                    {
-                        return false;
-                    }
-                }
-            }
-
-            return true;
-        }
-
-        public void Add(double v)
-        {
-            if (_AddPos2 != 0)
-            {
-                throw new InvalidOperationException("Mixed calls to Add(v) and Add(a,b,c,d)");
-            }
-            this[_AddPos1++] = v;
-        }
-
-        public void Add(double a, double b, double c, double d)
-        {
-            if (_AddPos1 != 0)
-            {
-                throw new InvalidOperationException("Mixed calls to Add(v) and Add(a,b,c,d)");
-            }
-            this[_AddPos2, 0] = a;
-            this[_AddPos2, 1] = b;
-            this[_AddPos2, 2] = c;
-            this[_AddPos2, 3] = d;
-            _AddPos2++;
+            return this.Zip(mat, (a, b) => (a >= b * (1.0 - eta)) && (b >= a * (1.0 - eta))).All(v => v);
         }
 
         IEnumerator IEnumerable.GetEnumerator()
@@ -333,26 +227,6 @@ namespace RS5_Extractor
             }
         }
 
-        IEnumerator<double[]> IEnumerable<double[]>.GetEnumerator()
-        {
-            for (int i = 0; i < 4; i++)
-            {
-                yield return new double[] { this[i,0], this[i,1], this[i,2], this[i,3] };
-            }
-        }
-
-        public static Matrix4 Identity
-        {
-            get
-            {
-                return new Matrix4
-                {
-                    { 1, 0, 0, 0 },
-                    { 0, 1, 0, 0 },
-                    { 0, 0, 1, 0 },
-                    { 0, 0, 0, 1 }
-                };
-            }
-        }
+        public static readonly Matrix4 Identity = new Matrix4(1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1);
     }
 }

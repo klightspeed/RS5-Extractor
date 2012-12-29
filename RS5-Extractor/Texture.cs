@@ -9,50 +9,105 @@ using System.IO;
 
 namespace RS5_Extractor
 {
-    public class Texture
+    public class DDSImage
     {
-        protected static Dictionary<string, Texture> Textures = new Dictionary<string, Texture>();
-        protected RS5Chunk Chunk;
+        public readonly int Width;
+        public readonly int Height;
+        public readonly int Depth;
+        public readonly uint Flags;
+        public readonly int Pitch;
+        public readonly string FourCC;
+        public readonly int RGBBitCount;
+        public readonly uint RedMask;
+        public readonly uint GreenMask;
+        public readonly uint BlueMask;
+        public readonly uint AlphaMask;
+        public readonly byte[] Data;
+        public readonly int ImageOffset;
+        public readonly bool IsARGB32;
+        public readonly bool HasAlpha;
+        public readonly Bitmap Bitmap;
+        public readonly double IntensityFactor;
+        public readonly string FailureReason;
+        public bool HasBitmap { get { return Bitmap != null; } }
 
-        public string Name { get; protected set; }
-        public DateTime ModTime { get; protected set; }
-
-        public string PNGFilename
+        public DDSImage(byte[] data)
         {
-            get
+            if (data[0] == 'D' && data[1] == 'D' && data[2] == 'S' && data[3] == ' ')
             {
-                return ".\\" + Name + ".png";
-            }
-        }
+                Height = BitConverter.ToInt32(data, 12);
+                Width = BitConverter.ToInt32(data, 16);
+                Depth = BitConverter.ToInt32(data, 24);
+                Flags = BitConverter.ToUInt32(data, 8);
+                Pitch = BitConverter.ToInt32(data, 20);
+                FourCC = Encoding.ASCII.GetString(data, 84, 4);
+                RGBBitCount = BitConverter.ToInt32(data, 88);
+                RedMask = BitConverter.ToUInt32(data, 92);
+                GreenMask = BitConverter.ToUInt32(data, 96);
+                BlueMask = BitConverter.ToUInt32(data, 100);
+                AlphaMask = BitConverter.ToUInt32(data, 104);
+                Data = data;
+                ImageOffset = 128;
 
-        public string DDSFilename
-        {
-            get
-            {
-                return ".\\" + Name + ".dds";
-            }
-        }
-
-        protected WeakReference _Data = null;
-        public byte[] Data
-        {
-            get
-            {
-                byte[] ret = null;
-                if (_Data != null)
+                if (Depth == 0)
                 {
-                    ret = (byte[])_Data.Target;
+                    Depth = 1;
                 }
-                if (ret == null)
+
+                if ((Flags & 8) == 0)
                 {
-                    ret = Chunk.Chunks["DATA"].Data.ToArray();
-                    _Data = new WeakReference(ret);
+                    Pitch = Width * RGBBitCount / 8;
                 }
-                return ret;
+
+                IsARGB32 = (FourCC == "DXT1" || FourCC == "DXT2" || FourCC == "DXT3" || FourCC == "DXT4" || FourCC == "DXT5" || FourCC == "\0\0\0\0");
+                IntensityFactor = 1.0;
+
+                try
+                {
+                    FailureReason = null;
+                    switch (FourCC)
+                    {
+                        case "DXT1":
+                            Bitmap = GetBitmapFromDDS_DXT1(Data, ImageOffset, Width, Height, out HasAlpha);
+                            break;
+                        case "DXT2":
+                            Bitmap = GetBitmapFromDDS_DXT3(Data, ImageOffset, Width, Height, true, out HasAlpha);
+                            break;
+                        case "DXT3":
+                            Bitmap = GetBitmapFromDDS_DXT3(Data, ImageOffset, Width, Height, false, out HasAlpha);
+                            break;
+                        case "DXT4":
+                            Bitmap = GetBitmapFromDDS_DXT5(Data, ImageOffset, Width, Height, true, out HasAlpha);
+                            break;
+                        case "DXT5":
+                            Bitmap = GetBitmapFromDDS_DXT5(Data, ImageOffset, Width, Height, false, out HasAlpha);
+                            break;
+                        case "\0\0\0\0":
+                            Bitmap = GetBitmapFromDDS_RAW(Data, ImageOffset, Width, Height, Pitch, RGBBitCount, RedMask, GreenMask, BlueMask, AlphaMask, out HasAlpha, out IsARGB32);
+                            break;
+                        case "q\0\0\0":
+                            Bitmap = GetBitmapFromDDS_ARGB16F(Data, ImageOffset, Width, Height, out HasAlpha, out IntensityFactor);
+                            break;
+                        default:
+                            Bitmap = null;
+                            FailureReason = String.Format("Unknown DDS FourCC {0:X2}:{1:X2}:{2:X2}:{3:X2}", Data[84], Data[85], Data[86], Data[87]);
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Bitmap = null;
+                    FailureReason = ex.Message;
+                }
+            }
+            else
+            {
+                throw new NotImplementedException(String.Format("Unknown file format {0:X2}:{1:X2}:{2:X2}:{3:X2}", data[0], data[1], data[2], data[3]));
             }
         }
 
-        protected Color[,] GetDXT1ColourBlock(byte[] data, int offset, bool IsDXT3)
+        #region DDS to Bitmap conversion
+        protected static Color[,] GetDXT1ColourBlock(byte[] data, int offset, bool IsDXT3)
         {
             ushort c0v = BitConverter.ToUInt16(data, offset);
             ushort c1v = BitConverter.ToUInt16(data, offset + 2);
@@ -83,10 +138,11 @@ namespace RS5_Extractor
             return output;
         }
 
-        protected Bitmap GetBitmapFromDDS_DXT1(byte[] data, int offset, int width, int height)
+        protected static Bitmap GetBitmapFromDDS_DXT1(byte[] data, int offset, int width, int height, out bool hasalpha)
         {
             Bitmap bmp = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             byte[] bmpraw = new byte[width * height * 4];
+            hasalpha = false;
 
             for (int y = 0; y < height; y += 4)
             {
@@ -103,7 +159,8 @@ namespace RS5_Extractor
                                 bmpraw[i] = colourdata[u, v].B;
                                 bmpraw[i + 1] = colourdata[u, v].G;
                                 bmpraw[i + 2] = colourdata[u, v].R;
-                                bmpraw[i + 3] = colourdata[u, v].B;
+                                bmpraw[i + 3] = colourdata[u, v].A;
+                                hasalpha |= colourdata[u, v].A != 255;
                             }
                         }
                     }
@@ -123,10 +180,11 @@ namespace RS5_Extractor
             return bmp;
         }
 
-        protected Bitmap GetBitmapFromDDS_DXT3(byte[] data, int offset, int width, int height, bool IsDXT2)
+        protected static Bitmap GetBitmapFromDDS_DXT3(byte[] data, int offset, int width, int height, bool IsDXT2, out bool hasalpha)
         {
             Bitmap bmp = new Bitmap(width, height, IsDXT2 ? PixelFormat.Format32bppPArgb : PixelFormat.Format32bppArgb);
             byte[] bmpraw = new byte[width * height * 4];
+            hasalpha = false;
 
             for (int y = 0; y < height; y += 4)
             {
@@ -153,6 +211,7 @@ namespace RS5_Extractor
                                 bmpraw[i + 1] = colourdata[u, v].G;
                                 bmpraw[i + 2] = colourdata[u, v].R;
                                 bmpraw[i + 3] = alphadata[u, v];
+                                hasalpha |= alphadata[u, v] != 255;
                             }
                         }
                     }
@@ -173,10 +232,11 @@ namespace RS5_Extractor
             return bmp;
         }
 
-        protected Bitmap GetBitmapFromDDS_DXT5(byte[] data, int offset, int width, int height, bool IsDXT4)
+        protected static Bitmap GetBitmapFromDDS_DXT5(byte[] data, int offset, int width, int height, bool IsDXT4, out bool hasalpha)
         {
             Bitmap bmp = new Bitmap(width, height, IsDXT4 ? PixelFormat.Format32bppPArgb : PixelFormat.Format32bppArgb);
             byte[] bmpraw = new byte[width * height * 4];
+            hasalpha = false;
 
             for (int y = 0; y < height; y += 4)
             {
@@ -226,6 +286,7 @@ namespace RS5_Extractor
                                 bmpraw[i + 1] = colourdata[u, v].G;
                                 bmpraw[i + 2] = colourdata[u, v].R;
                                 bmpraw[i + 3] = alphadata[u, v];
+                                hasalpha |= alphadata[u, v] != 255;
                             }
                         }
                     }
@@ -246,7 +307,7 @@ namespace RS5_Extractor
             return bmp;
         }
 
-        protected int MostSignificantBitPosition(uint v)
+        protected static int MostSignificantBitPosition(uint v)
         {
             for (int i = 31; i >= 0; i--)
             {
@@ -258,7 +319,19 @@ namespace RS5_Extractor
             return -1;
         }
 
-        protected byte GetMaskShiftVal(uint v, uint mask, int shift, byte valifmaskzero)
+        protected static int LeastSignificantBitPosition(uint v)
+        {
+            for (int i = 0; i < 32; i++)
+            {
+                if ((v & (1 << i)) != 0)
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        protected static byte GetMaskShiftVal(uint v, uint mask, int shift, byte valifmaskzero)
         {
             if (mask == 0)
             {
@@ -282,44 +355,143 @@ namespace RS5_Extractor
             }
         }
 
-        protected Bitmap GetBitmapFromDDS_RAW(byte[] data)
+        protected static Bitmap GetBitmapFromDDS_RAW(byte[] Data, int Offset, int Width, int Height, int Pitch, int RGBBitCount, uint RedMask, uint GreenMask, uint BlueMask, uint AlphaMask, out bool hasalpha, out bool isargb32)
         {
-            uint flags = BitConverter.ToUInt32(data, 8);
-            int height = BitConverter.ToInt32(data, 12);
-            int width = BitConverter.ToInt32(data, 16);
-            int pitch = BitConverter.ToInt32(data, 20);
-            int rgbbitcount = BitConverter.ToInt32(data, 88);
-            uint redmask = BitConverter.ToUInt32(data, 92);
-            uint grnmask = BitConverter.ToUInt32(data, 96);
-            uint blumask = BitConverter.ToUInt32(data, 100);
-            uint alphamask = BitConverter.ToUInt32(data, 104);
+            uint RGBBitMask = (uint)((1L << RGBBitCount) - 1);
+            int RedShift = MostSignificantBitPosition(RedMask) - 7;
+            int GreenShift = MostSignificantBitPosition(GreenMask) - 7;
+            int BlueShift = MostSignificantBitPosition(BlueMask) - 7;
+            int AlphaShift = MostSignificantBitPosition(AlphaMask) - 7;
+            int RedBits = RedMask == 0 ? 0 : MostSignificantBitPosition(RedMask) - LeastSignificantBitPosition(RedMask) + 1;
+            int GreenBits = GreenMask == 0 ? 0 : MostSignificantBitPosition(GreenMask) - LeastSignificantBitPosition(GreenMask) + 1;
+            int BlueBits = BlueMask == 0 ? 0 : MostSignificantBitPosition(BlueMask) - LeastSignificantBitPosition(BlueMask) + 1;
+            int AlphaBits = AlphaMask == 0 ? 0 : MostSignificantBitPosition(AlphaMask) - LeastSignificantBitPosition(AlphaMask) + 1;
+            hasalpha = false;
+            isargb32 = RedBits <= 8 && GreenBits <= 8 && BlueBits <= 8 && AlphaBits <= 8;
 
-            int redshift = MostSignificantBitPosition(redmask) - 7;
-            int grnshift = MostSignificantBitPosition(grnmask) - 7;
-            int blushift = MostSignificantBitPosition(blumask) - 7;
-            int alphashift = MostSignificantBitPosition(alphamask) - 7;
+            Bitmap bmp = new Bitmap(Width, Height, PixelFormat.Format32bppArgb);
+            byte[] bmpraw = new byte[Width * Height * 4];
+
+            for (int y = 0; y < Height; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    int w = (4 - ((RGBBitCount + 7) / 8));
+                    int bitpos = y * Pitch * 8 + x * RGBBitCount;
+                    int i = ((bitpos + RGBBitCount - 1) / 8 - 7);
+                    int b = (bitpos - i * 8);
+                    int o = (y * Width + x) * 4;
+                    uint v = (uint)((BitConverter.ToUInt64(Data, i + 128) >> b) & RGBBitMask);
+                    bmpraw[o + 0] = GetMaskShiftVal(v, BlueMask, BlueShift, 0x00);
+                    bmpraw[o + 1] = GetMaskShiftVal(v, GreenMask, GreenShift, 0x00);
+                    bmpraw[o + 2] = GetMaskShiftVal(v, RedMask, RedShift, 0x00);
+                    bmpraw[o + 3] = GetMaskShiftVal(v, AlphaMask, AlphaShift, 0xFF);
+                    hasalpha = bmpraw[o + 3] != 255;
+                }
+            }
+            BitmapData bmpdata = bmp.LockBits(new Rectangle(0, 0, Width, Height), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+
+            for (int y = 0; y < Height; y++)
+            {
+                Marshal.Copy(bmpraw, y * Width * 4, bmpdata.Scan0 + y * bmpdata.Stride, Width * 4);
+            }
+
+            bmp.UnlockBits(bmpdata);
+
+            return bmp;
+        }
+
+        protected static float HalfToFloat(ushort v)
+        {
+            uint s = (v & 0x8000U) << 16;
+            uint e = ((v & 0x7c00U) >> 10) + 127 - 15;
+            uint m = ((v & 0x03ffU) << 13);
+
+            if (e == 127 - 15)
+            {
+                if (m == 0)
+                {
+                    e = 0;
+                }
+                else
+                {
+                    while ((m & 0x800000) == 0)
+                    {
+                        m <<= 1;
+                        e--;
+                    }
+
+                    e++;
+                    m &= 0x7fffff;
+                }
+            }
+            else if (e == 127 + 16)
+            {
+                e = 255;
+            }
+
+            uint o = s | (e << 23) | m;
+            return BitConverter.ToSingle(BitConverter.GetBytes(o), 0);
+        }
+
+        protected static Bitmap GetBitmapFromDDS_ARGB16F(byte[] data, int offset, int width, int height, out bool hasalpha, out double intensity)
+        {
+            float[] fdata = new float[width * height * 4];
+            double maxval = Double.NegativeInfinity;
+            double minval = Double.PositiveInfinity;
+            double maxalpha = Double.NegativeInfinity;
+            double minalpha = Double.PositiveInfinity;
+            hasalpha = false;
+
+            for (int i = 0; i < width * height * 4; i+=4)
+            {
+                for (int j = 0; j < 4; j++)
+                {
+                    fdata[i + j] = HalfToFloat(BitConverter.ToUInt16(data, offset + (i + j) * 2));
+                }
+
+                for (int j = 0; j < 3; j++)
+                {
+                    if (fdata[i] > maxval)
+                    {
+                        maxval = fdata[i];
+                    }
+                    if (fdata[i] < minval)
+                    {
+                        minval = fdata[i];
+                    }
+                }
+            }
+
+            if (minval < 0 || minalpha < 0)
+            {
+                throw new NotImplementedException("ARGB16F with negative values not supported");
+            }
+
+            if (maxval == 0)
+            {
+                maxval = 1.0;
+            }
+
+            if (maxalpha == 0)
+            {
+                maxalpha = 1.0;
+            }
+
+            intensity = maxval;
 
             Bitmap bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb);
             byte[] bmpraw = new byte[width * height * 4];
 
-            if ((flags & 8) == 0)
+            for (int i = 0; i < width * height * 4; i += 4)
             {
-                pitch = width * rgbbitcount / 8;
+                bmpraw[i + 0] = (byte)(fdata[i + 0] * 255 / maxval);
+                bmpraw[i + 1] = (byte)(fdata[i + 1] * 255 / maxval);
+                bmpraw[i + 2] = (byte)(fdata[i + 2] * 255 / maxval);
+                bmpraw[i + 3] = (byte)(fdata[i + 3] * 255 / maxalpha);
+                hasalpha |= bmpraw[i + 3] != 255;
             }
 
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
-                    int i = y * pitch + x * (rgbbitcount / 8);
-                    int o = (y * width + x) * 4;
-                    uint v = BitConverter.ToUInt32(data, i + 128 - (rgbbitcount / 8)) >> (32 - rgbbitcount);
-                    bmpraw[o + 0] = GetMaskShiftVal(v, blumask, blushift, 0x00);
-                    bmpraw[o + 1] = GetMaskShiftVal(v, grnmask, grnshift, 0x00);
-                    bmpraw[o + 2] = GetMaskShiftVal(v, redmask, redshift, 0x00);
-                    bmpraw[o + 3] = GetMaskShiftVal(v, alphamask, alphashift, 0xFF);
-                }
-            }
             BitmapData bmpdata = bmp.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
 
             for (int y = 0; y < height; y++)
@@ -331,82 +503,158 @@ namespace RS5_Extractor
 
             return bmp;
         }
+        #endregion
 
-        protected Bitmap GetBitmapFromDDS(byte[] data)
+    }
+    
+    public class Texture
+    {
+        protected static Dictionary<string, Texture> Textures = new Dictionary<string, Texture>();
+
+        #region Lazy-init property backing
+        protected Lazy<DDSImage> _Image;
+        protected int? _Width;
+        protected int? _Height;
+        protected bool? _IsLossless;
+        protected bool? _HasAlpha;
+        protected bool? _HasBitmap;
+        #endregion
+
+        #region Lazy-init properties
+        public DDSImage Image { get { return _Image.Value; } }
+        public int Width { get { return (int)(_Width = _Width ?? Image.Width); } }
+        public int Height { get { return (int)(_Height = _Height ?? Image.Height); } }
+        public bool IsLossless { get { return (bool)(_IsLossless = _IsLossless ?? Image.IsARGB32); } }
+        public bool HasAlpha { get { return (bool)(_HasAlpha = _HasAlpha ?? Image.HasAlpha); } }
+        public bool HasBitmap { get { return (bool)(_HasBitmap = _HasBitmap ?? Image.HasBitmap); } }
+        #endregion
+
+        protected RS5Chunk Chunk;
+
+        public string Name { get; protected set; }
+        public DateTime ModTime { get; protected set; }
+
+        public string PNGFilename
         {
-            int height = BitConverter.ToInt32(data, 12);
-            int width = BitConverter.ToInt32(data, 16);
-            string fourcc = Encoding.ASCII.GetString(data, 84, 4);
-
-            switch (fourcc)
+            get
             {
-                case "DXT1":
-                    return GetBitmapFromDDS_DXT1(data, 128, width, height);
-                case "DXT2":
-                    return GetBitmapFromDDS_DXT3(data, 128, width, height, true);
-                case "DXT3":
-                    return GetBitmapFromDDS_DXT3(data, 128, width, height, false);
-                case "DXT4":
-                    return GetBitmapFromDDS_DXT5(data, 128, width, height, true);
-                case "DXT5":
-                    return GetBitmapFromDDS_DXT5(data, 128, width, height, false);
-                case "\0\0\0\0":
-                    return GetBitmapFromDDS_RAW(data);
-                default:
-                    throw new NotImplementedException(String.Format("Unknown DDS FourCC {0:X2}:{1:X2}:{2:X2}:{3:X2}", data[84], data[85], data[86], data[87]));
+                return Name + ".png";
             }
         }
 
-        public Bitmap GetBitmap()
+        public string JPEGFilename
         {
-            byte[] data = Data;
-            if (data[0] == 'D' && data[1] == 'D' && data[2] == 'S' && data[3] == ' ')
+            get
             {
-                return GetBitmapFromDDS(data);
-            }
-            else
-            {
-                throw new NotImplementedException(String.Format("Unknown file format {0:X2}:{1:X2}:{2:X2}:{3:X2}", data[0], data[1], data[2], data[3]));
+                return Name + ".jpg";
             }
         }
 
-        public void SavePNG()
+        public string DDSFilename
         {
-            string dir = Path.GetDirectoryName(PNGFilename);
+            get
+            {
+                return Name + ".dds";
+            }
+        }
+
+        public string Filename
+        {
+            get
+            {
+                return (HasBitmap ? (HasAlpha ? PNGFilename : JPEGFilename) : DDSFilename);
+            }
+        }
+
+        #region Lazy-init initializers
+        protected DDSImage GetDDS()
+        {
+            byte[] data = Chunk.Chunks["DATA"].Data.ToArray();
+            this.Chunk.Flush();
+            return new DDSImage(data);
+        }
+
+        #endregion
+
+        protected static void SaveBitmap(Bitmap bmp, ImageFormat format, string filename, DateTime ModTime, params EncoderParameter[] encoderparams)
+        {
+            ImageCodecInfo codec = ImageCodecInfo.GetImageEncoders().Where(c => c.FormatID == format.Guid).Single();
+
+            string dir = Path.GetDirectoryName(filename);
             if (!Directory.Exists(dir))
             {
                 Directory.CreateDirectory(dir);
             }
 
-            try
+            using (MemoryStream memstrm = new MemoryStream())
             {
-                Bitmap bmp = GetBitmap();
-                using (MemoryStream memstrm = new MemoryStream())
+                if (encoderparams == null || encoderparams.Length == 0)
                 {
-                    bmp.Save(memstrm, ImageFormat.Png);
-                    File.WriteAllBytes(PNGFilename, memstrm.ToArray());
-                    File.SetLastWriteTimeUtc(PNGFilename, ModTime);
+                    bmp.Save(memstrm, format);
+                }
+                else
+                {
+                    bmp.Save(memstrm, codec, new EncoderParameters { Param = encoderparams });
+                }
+                File.WriteAllBytes(filename, memstrm.ToArray());
+                File.SetLastWriteTimeUtc(filename, ModTime);
+            }
+        }
+
+        public void SaveImage()
+        {
+            Bitmap bmp = Image.Bitmap;
+            string filename = "." + Path.DirectorySeparatorChar + Filename;
+
+            switch (Path.GetExtension(filename))
+            {
+                case ".dds": SaveDDS(filename, Image, ModTime); break;
+                case ".png": SavePNG(filename, bmp, ModTime); break;
+                case ".jpg": SaveJPEG(filename, bmp, ModTime); break;
+                default: throw new InvalidOperationException(String.Format("Unknown extension {0}", Path.GetExtension(filename)));
+            }
+        }
+
+        public bool TextureFileExists()
+        {
+            foreach (string name in new string[] { DDSFilename, PNGFilename, JPEGFilename })
+            {
+                string filename = "." + Path.DirectorySeparatorChar + DDSFilename;
+                if (File.Exists(filename))
+                {
+                    return true;
                 }
             }
-            catch (UnauthorizedAccessException)
-            {
-                throw;
-            }
-            catch
-            {
-            }
+
+            return false;
         }
 
         public void SaveDDS()
         {
-            string dir = Path.GetDirectoryName(DDSFilename);
+            string filename = "." + Path.DirectorySeparatorChar + DDSFilename;
+            SaveDDS(filename, Image, ModTime);
+        }
+
+        public static void SavePNG(string filename, Bitmap bmp, DateTime ModTime)
+        {
+            SaveBitmap(bmp, ImageFormat.Png, filename, ModTime);
+        }
+
+        public static void SaveJPEG(string filename, Bitmap bmp, DateTime ModTime)
+        {
+            SaveBitmap(bmp, ImageFormat.Jpeg, filename, ModTime, new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 90L));
+        }
+
+        public static void SaveDDS(string filename, DDSImage image, DateTime ModTime)
+        {
+            string dir = Path.GetDirectoryName(filename);
             if (!Directory.Exists(dir))
             {
                 Directory.CreateDirectory(dir);
             }
 
-            File.WriteAllBytes(DDSFilename, Data);
-            File.SetLastWriteTimeUtc(DDSFilename, ModTime);
+            File.WriteAllBytes(filename, image.Data.ToArray());
+            File.SetLastWriteTimeUtc(filename, ModTime);
         }
 
         public static Texture GetTexture(string name)
@@ -429,12 +677,18 @@ namespace RS5_Extractor
         {
             Texture texture = GetTexture(dirent.Name);
             texture.ModTime = dirent.ModTime;
-            texture.Chunk = dirent.Data;
+            texture.Chunk = dirent.GetData();
         }
 
         private Texture(string name)
         {
             this.Name = name;
+            this._Image = new Lazy<DDSImage>(() => GetDDS());
+        }
+
+        public void Flush()
+        {
+            this._Image = new Lazy<DDSImage>(() => GetDDS());
         }
     }
 }

@@ -59,7 +59,7 @@ namespace RS5_Extractor
 
             while (true)
             {
-                string key = data.GetString();
+                string key = data.ReadString();
 
                 if (key == "")
                 {
@@ -73,18 +73,13 @@ namespace RS5_Extractor
             }
         }
 
-        protected int ProcessInt32(ByteSubArray data)
-        {
-            return data.GetInt32();
-        }
-
         protected List<int> ProcessInt32List(ByteSubArray data)
         {
             List<int> vals = new List<int>();
-            int nents = data.GetInt32();
+            int nents = data.ReadInt32();
             for (int i = 0; i < nents; i++)
             {
-                vals.Add(data.GetInt32());
+                vals.Add(data.ReadInt32());
             }
             return vals;
         }
@@ -92,10 +87,10 @@ namespace RS5_Extractor
         protected List<float> ProcessSingleList(ByteSubArray data)
         {
             List<float> vals = new List<float>();
-            int nents = data.GetInt32();
+            int nents = data.ReadInt32();
             for (int i = 0; i < nents; i++)
             {
-                vals.Add(data.GetSingle());
+                vals.Add(data.ReadSingle());
             }
             return vals;
         }
@@ -103,10 +98,10 @@ namespace RS5_Extractor
         protected List<string> ProcessStringList(ByteSubArray data)
         {
             List<string> vals = new List<string>();
-            int nents = data.GetInt32();
+            int nents = data.ReadInt32();
             for (int i = 0; i < nents; i++)
             {
-                vals.Add(data.GetString());
+                vals.Add(data.ReadString());
             }
             return vals;
         }
@@ -114,7 +109,7 @@ namespace RS5_Extractor
         protected List<dynamic> ProcessList(ByteSubArray data, List<string> path)
         {
             List<object> vals = new List<object>();
-            int nents = data.GetInt32();
+            int nents = data.ReadInt32();
             for (int i = 0; i < nents; i++)
             {
                 List<string> _path = path.ToList();
@@ -126,16 +121,16 @@ namespace RS5_Extractor
 
         protected dynamic ProcessValue(ByteSubArray data, List<string> path)
         {
-            byte type = data.GetByte();
+            byte type = data.ReadByte();
             switch ((char)type)
             {
                 case 'T': return ProcessKeyValuePairs(data, path);
                 case 'I': return ProcessInt32List(data);
-                case 'i': return data.GetInt32();
+                case 'i': return data.ReadInt32();
                 case 'F': return ProcessSingleList(data);
-                case 'f': return data.GetSingle();
+                case 'f': return data.ReadSingle();
                 case 'S': return ProcessStringList(data);
-                case 's': return data.GetString();
+                case 's': return data.ReadString();
                 case 'M': return ProcessList(data, path);
                 case '.': return null;
                 default:

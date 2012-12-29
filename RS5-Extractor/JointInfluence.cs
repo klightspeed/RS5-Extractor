@@ -7,7 +7,13 @@ namespace RS5_Extractor
 {
     public class JointInfluence
     {
-        public Joint Joint { get; set; }
-        public double Influence { get; set; }
+        public readonly Joint Joint;
+        public readonly double Influence;
+
+        public JointInfluence(Joint joint, double influence)
+        {
+            Joint = joint;
+            Influence = influence;
+        }
     }
 }

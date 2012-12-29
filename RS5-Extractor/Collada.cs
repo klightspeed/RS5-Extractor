@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Xml.Linq;
+using System.IO;
 
 namespace RS5_Extractor
 {
@@ -83,9 +84,9 @@ namespace RS5_Extractor
             public Animation(string animationname, Bone bone)
                 : this(animationname + "_" + bone.Joint.Symbol)
             {
-                Source insrc = new Source(ID + "_time", "INPUT", "TIME", bone.Joint.Animation.Frames.Keys.Select(k => k / bone.Joint.Animation.FrameRate), bone.Joint.Animation.Frames.Count);
-                Source outsrc = new Source(ID + "_out_xfrm", "OUTPUT", "TRANSFORM", bone.Joint.Animation.Frames.Values, bone.Joint.Animation.Frames.Count);
-                Source intsrc = new Source(ID + "_interp", "INTERPOLATION", "INTERPOLATION", bone.Joint.Animation.Frames.Select(kvp => "LINEAR"), bone.Joint.Animation.Frames.Count);
+                Source insrc = new Source(ID + "_time", "INPUT", "TIME", bone.Joint.Animation.Frames.Select(f => f.FrameNum / bone.Joint.Animation.FrameRate), bone.Joint.Animation.Frames.Length);
+                Source outsrc = new Source(ID + "_out_xfrm", "OUTPUT", "TRANSFORM", bone.Joint.Animation.Frames.Select(f => f.Transform), bone.Joint.Animation.Frames.Length);
+                Source intsrc = new Source(ID + "_interp", "INTERPOLATION", "INTERPOLATION", bone.Joint.Animation.Frames.Select(kvp => "LINEAR"), bone.Joint.Animation.Frames.Length);
                 Sampler sampler = new Sampler(ID + "_xfrm", insrc, outsrc, intsrc);
 
                 this.Add(
@@ -242,7 +243,7 @@ namespace RS5_Extractor
 
             public IEnumerable<Bone> GetAnimatedBones()
             {
-                return GetSelfAndDescendents().Where(b => b.Joint.Animation.Frames.Count != 0);
+                return GetSelfAndDescendents().Where(b => b.Joint.Animation.Frames.Length != 0);
             }
         }
 
@@ -636,9 +637,8 @@ namespace RS5_Extractor
                 this.TextureSymbol = texsym;
 
                 this.Add(
-                    //new XAttribute("name", TextureSymbol),
                     new XAttribute("depth", "1"),
-                    new XElement(ns + "init_from", String.Join("", path.Where(c => c == '\\').Select(c => "../")) + texture.PNGFilename.Replace('\\', '/'))
+                    new XElement(ns + "init_from", (path + texture.Filename).Replace('\\', '/'))
                 );
             }
         }
@@ -802,6 +802,59 @@ namespace RS5_Extractor
             }
         }
 
+        public class Exporter
+        {
+            public readonly string Filename;
+            public readonly Func<bool> IsValidFactory;
+            public readonly Func<IEnumerable<List<Triangle>>> MeshFactory;
+            public readonly Func<Joint> SkeletonFactory;
+            public readonly DateTime CreateTime;
+            public readonly DateTime ModTime;
+            public readonly bool overwrite;
+
+            public Exporter(string filename, Func<bool> IsValidFactory, Func<IEnumerable<List<Triangle>>> MeshFactory, Func<Joint> SkeletonFactory, DateTime CreateTime, DateTime ModTime, bool overwrite)
+            {
+                this.Filename = filename;
+                this.IsValidFactory = IsValidFactory;
+                this.MeshFactory = MeshFactory;
+                this.SkeletonFactory = SkeletonFactory;
+                this.CreateTime = CreateTime;
+                this.ModTime = ModTime;
+                this.overwrite = overwrite;
+            }
+
+            public void Save(Action onsave, Action oncomplete)
+            {
+                if (IsValidFactory() && (overwrite || !File.Exists(Filename)))
+                {
+                    onsave();
+                    Collada.Save(Filename, MeshFactory(), SkeletonFactory(), CreateTime, ModTime);
+                    oncomplete();
+                }
+            }
+        }
+        
+        public class Exporter<T> : Exporter
+        {
+            public readonly T ObjectState;
+
+            public Exporter(string filename, Func<bool> IsValidFactory, Func<IEnumerable<List<Triangle>>> MeshFactory, Func<Joint> SkeletonFactory, DateTime CreateTime, DateTime ModTime, bool overwrite, T state)
+                : base(filename, IsValidFactory, MeshFactory, SkeletonFactory, CreateTime, ModTime, overwrite)
+            {
+                this.ObjectState = state;
+            }
+
+            public void Save(Action<T> onsave, Action<T> oncomplete)
+            {
+                if (IsValidFactory() && (overwrite || !File.Exists(Filename)))
+                {
+                    onsave(ObjectState);
+                    Collada.Save(Filename, MeshFactory(), SkeletonFactory(), CreateTime, ModTime);
+                    oncomplete(ObjectState);
+                }
+            }
+        }
+
         protected static XNamespace ns = "http://www.collada.org/2005/11/COLLADASchema";
 
         protected static string GetString(Matrix4 matrix)
@@ -916,6 +969,21 @@ namespace RS5_Extractor
                     )
                 )
             );
+        }
+
+        public static void Save(string filename, IEnumerable<List<Triangle>> meshes, Joint rootjoint, DateTime creattime, DateTime modtime)
+        {
+            string dir = Path.GetDirectoryName(filename);
+            if (!Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            string path = "." + Path.DirectorySeparatorChar + String.Join(Path.DirectorySeparatorChar.ToString(), Path.GetDirectoryName(filename).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Where(d => d != "." && d != "..").Select(d => ".."));
+            
+            XDocument doc = new Collada(meshes, rootjoint, path, creattime, modtime);
+            doc.Save(filename);
+            File.SetLastWriteTimeUtc(filename, modtime);
         }
     }
 }

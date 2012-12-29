@@ -3,6 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.IO;
+using System.Runtime.InteropServices;
+using Ionic.Zlib;
 
 namespace RS5_Extractor
 {
@@ -21,6 +24,10 @@ namespace RS5_Extractor
 
         public SubArray(IList<T> data)
             : this(data, 0, data.Count)
+        {
+        }
+
+        protected SubArray()
         {
         }
 
@@ -129,7 +136,22 @@ namespace RS5_Extractor
 
     public class ByteSubArray : SubArray<byte>
     {
+        private static Dictionary<Type, Func<ByteSubArray, int, dynamic>> Getters = new Dictionary<Type, Func<ByteSubArray, int, dynamic>>();
         public int Position;
+
+        static ByteSubArray()
+        {
+            Getters[typeof(byte)] = (a, o) => a.GetByte(o);
+            Getters[typeof(sbyte)] = (a, o) => a.GetSByte(o);
+            Getters[typeof(short)] = (a, o) => a.GetInt16(o);
+            Getters[typeof(ushort)] = (a, o) => a.GetUInt16(o);
+            Getters[typeof(int)] = (a, o) => a.GetInt32(o);
+            Getters[typeof(uint)] = (a, o) => a.GetUInt32(o);
+            Getters[typeof(long)] = (a, o) => a.GetInt64(o);
+            Getters[typeof(ulong)] = (a, o) => a.GetUInt64(o);
+            Getters[typeof(float)] = (a, o) => a.GetSingle(o);
+            Getters[typeof(double)] = (a, o) => a.GetDouble(o);
+        }
 
         public ByteSubArray(IList<byte> data, int offset, int length)
             : base(data, offset, length)
@@ -138,6 +160,15 @@ namespace RS5_Extractor
 
         public ByteSubArray(IList<byte> data)
             : base(data)
+        {
+        }
+
+        protected ByteSubArray()
+            : base()
+        {
+        }
+
+        private void InitGetters()
         {
         }
 
@@ -151,40 +182,43 @@ namespace RS5_Extractor
             return data;
         }
 
-        public int GetInt32(int offset)
-        {
-            return BitConverter.ToInt32(GetBytes(offset, 4), 0);
-        }
+        public byte   GetByte(int offset)   { return this[offset]; }
+        public sbyte  GetSByte(int offset)  { return unchecked((sbyte)this[offset]); }
+        public short  GetInt16(int offset)  { return BitConverter.ToInt16(GetBytes(offset, 2), 0); }
+        public ushort GetUInt16(int offset) { return BitConverter.ToUInt16(GetBytes(offset, 2), 0); }
+        public int    GetInt32(int offset)  { return BitConverter.ToInt32(GetBytes(offset, 4), 0); }
+        public uint   GetUInt32(int offset) { return BitConverter.ToUInt32(GetBytes(offset, 4), 0); }
+        public long   GetInt64(int offset)  { return BitConverter.ToInt64(GetBytes(offset, 8), 0); }
+        public ulong  GetUInt64(int offset) { return BitConverter.ToUInt64(GetBytes(offset, 8), 0); }
+        public float  GetSingle(int offset) { return BitConverter.ToSingle(GetBytes(offset, 4), 0); }
+        public double GetDouble(int offset) { return BitConverter.ToDouble(GetBytes(offset, 8), 0); }
 
-        public int GetInt32()
+        private dynamic InternalRead(Func<ByteSubArray, int, dynamic> getter, int size)
         {
             int pos = Position;
-            Position += 4;
-            return GetInt32(pos);
+            Position += size;
+            return getter(this, pos);
         }
 
-        public long GetInt64(int offset)
-        {
-            return BitConverter.ToInt64(GetBytes(offset, 8), 0);
-        }
+        public byte   ReadByte()   { return InternalRead(Getters[typeof(byte)],   sizeof(byte)); }
+        public sbyte  ReadSByte()  { return InternalRead(Getters[typeof(sbyte)],  sizeof(sbyte)); }
+        public short  ReadInt16()  { return InternalRead(Getters[typeof(short)],  sizeof(short)); }
+        public ushort ReadUInt16() { return InternalRead(Getters[typeof(ushort)], sizeof(ushort)); }
+        public int    ReadInt32()  { return InternalRead(Getters[typeof(int)],    sizeof(int)); }
+        public uint   ReadUInt32() { return InternalRead(Getters[typeof(uint)],   sizeof(uint)); }
+        public long   ReadInt64()  { return InternalRead(Getters[typeof(long)],   sizeof(long)); }
+        public ulong  ReadUInt64() { return InternalRead(Getters[typeof(ulong)],  sizeof(ulong)); }
+        public float  ReadSingle() { return InternalRead(Getters[typeof(float)],  sizeof(float)); }
+        public double ReadDouble() { return InternalRead(Getters[typeof(double)], sizeof(double)); }
 
-        public long GetInt64()
+        public Matrix4 GetMatrix4(int offset)
         {
-            int pos = Position;
-            Position += 8;
-            return GetInt64(pos);
-        }
-
-        public float GetSingle(int offset)
-        {
-            return BitConverter.ToSingle(GetBytes(offset, 4), 0);
-        }
-
-        public float GetSingle()
-        {
-            int pos = Position;
-            Position += 4;
-            return GetSingle(pos);
+            return new Matrix4(
+                GetSingle(offset +  0), GetSingle(offset + 16), GetSingle(offset + 32), GetSingle(offset + 48),
+                GetSingle(offset +  4), GetSingle(offset + 20), GetSingle(offset + 36), GetSingle(offset + 52),
+                GetSingle(offset +  8), GetSingle(offset + 24), GetSingle(offset + 40), GetSingle(offset + 56),
+                GetSingle(offset + 12), GetSingle(offset + 28), GetSingle(offset + 44), GetSingle(offset + 60)
+            );
         }
 
         protected string GetString(int offset, int length, out int endoffset)
@@ -212,16 +246,32 @@ namespace RS5_Extractor
             return GetString(offset, this.Count - offset);
         }
 
-        public string GetString()
+        public string ReadString()
         {
             return GetString(Position, this.Count - Position, out Position);
         }
+    }
 
-        public byte GetByte()
+    public class CompressedByteSubArray : ByteSubArray
+    {
+        public readonly int TotalSize;
+        public readonly int CompressedSize;
+
+        public CompressedByteSubArray(Stream stream, long offset)
         {
-            int pos = Position;
-            Position++;
-            return this[pos];
+            stream.Seek(offset, SeekOrigin.Begin);
+            using (ZlibStream zstream = new ZlibStream(stream, CompressionMode.Decompress, true))
+            {
+                using (MemoryStream outstrm = new MemoryStream())
+                {
+                    zstream.CopyTo(outstrm);
+                    TotalSize = (int)zstream.TotalOut;
+                    CompressedSize = (int)zstream.TotalIn;
+                    this.ParentData = outstrm.ToArray();
+                    this.Position = 0;
+                    this.DataLength = TotalSize;
+                }
+            }
         }
     }
 }

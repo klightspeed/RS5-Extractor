@@ -8,12 +8,23 @@ namespace RS5_Extractor
 {
     public class Vertex
     {
-        public Vector4 Position { get; set; }
-        public Vector4 Normal { get; set; }
-        public Vector4 Tangent { get; set; }
-        public Vector4 Binormal { get; set; }
-        public TextureCoordinate TexCoord { get; set; }
-        public JointInfluence[] JointInfluence { get; set; }
-        public byte[] ExtraData { get; set; }
+        public readonly Vector4 Position;
+        public readonly Vector4 Normal;
+        public readonly Vector4 Tangent;
+        public readonly Vector4 Binormal;
+        public readonly TextureCoordinate TexCoord;
+        public readonly JointInfluence[] JointInfluence;
+        public readonly byte[] ExtraData;
+
+        public Vertex(Vector4 position, Vector4 normal, Vector4 tangent, Vector4 binormal, TextureCoordinate texcoord, IEnumerable<JointInfluence> jointinfluence, byte[] extradata)
+        {
+            this.Position = position;
+            this.Normal = normal;
+            this.Tangent = tangent;
+            this.Binormal = binormal;
+            this.TexCoord = texcoord;
+            this.JointInfluence = jointinfluence == null ? new JointInfluence[0] : jointinfluence.ToArray();
+            this.ExtraData = extradata == null ? new byte[0] : extradata;
+        }
     }
 }

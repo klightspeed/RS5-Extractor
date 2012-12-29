@@ -8,11 +8,10 @@ namespace RS5_Extractor
 {
     public struct Vector4 : IEnumerable, IEnumerable<double>
     {
-        public double X { get; set; }
-        public double Y { get; set; }
-        public double Z { get; set; }
-        public double W { get; set; }
-        private int _AddPos;
+        public readonly double X;
+        public readonly double Y;
+        public readonly double Z;
+        public readonly double W;
 
         public double this[int i]
         {
@@ -27,27 +26,24 @@ namespace RS5_Extractor
                     default: throw new IndexOutOfRangeException();
                 }
             }
-            set
-            {
-                switch (i)
-                {
-                    case 0: X = value; break;
-                    case 1: Y = value; break;
-                    case 2: Z = value; break;
-                    case 3: W = value; break;
-                    default: throw new IndexOutOfRangeException();
-                }
-            }
         }
 
-        public Vector4(double x, double y, double z, double w)
-            : this()
+        public Vector4(IEnumerable<double> vals)
+            : this(vals.ToArray())
         {
-            _AddPos = 4;
-            X = x;
-            Y = y;
-            Z = z;
-            W = w;
+        }
+
+        public Vector4(params double[] array)
+        {
+            if (array.Length != 4)
+            {
+                throw new ArgumentException();
+            }
+
+            X = array[0];
+            Y = array[1];
+            Z = array[2];
+            W = array[3];
         }
 
         public bool EtaEqual(Vector4 a, double eta)
@@ -86,17 +82,17 @@ namespace RS5_Extractor
 
         public static Vector4 operator +(Vector4 a, Vector4 b)
         {
-            return new Vector4 { X = a.X + b.X, Y = a.Y + b.Y, Z = a.Z + b.Z, W = a.W + b.W };
+            return new Vector4(a.X + b.X, a.Y + b.Y, a.Z + b.Z, a.W + b.W);
         }
 
         public static Vector4 operator -(Vector4 a)
         {
-            return new Vector4 { X = -a.X, Y = -a.Y, Z = -a.Y, W = -a.W };
+            return new Vector4(-a.X, -a.Y, -a.Y, -a.W);
         }
 
         public static Vector4 operator *(Vector4 a, double b)
         {
-            return new Vector4 { X = a.X * b, Y = a.Y * b, Z = a.Z * b, W = a.W * b };
+            return new Vector4(a.X * b, a.Y * b, a.Z * b, a.W * b);
         }
 
         public static Vector4 operator *(double a, Vector4 b)
@@ -134,13 +130,8 @@ namespace RS5_Extractor
         {
             get
             {
-                return new Vector4 { X = 0, Y = 0, Z = 0, W = 0 };
+                return new Vector4(0, 0, 0, 0);
             }
-        }
-
-        public void Add(double v)
-        {
-            this[_AddPos++] = v;
         }
 
         public IEnumerator<double> GetEnumerator()

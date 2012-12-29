@@ -7,24 +7,31 @@ namespace RS5_Extractor
 {
     public class Joint
     {
-        public string Symbol { get; set; }
-        public string Name { get; set; }
-        public Matrix4 ReverseBindingMatrix { get; set; }
-        public Matrix4 InitialPose { get; set; }
-        public Joint[] Children { get; set; }
-        public AnimationSequence Animation { get; set; }
+        public readonly string Symbol;
+        public readonly string Name;
+        public readonly Matrix4 ReverseBindingMatrix;
+        public readonly Matrix4 InitialPose;
+        public readonly Joint[] Children;
+        public readonly AnimationSequence Animation;
+
+        public Joint(string symbol, string name, Matrix4 revbind, Matrix4 initialpose, IEnumerable<Joint> children, AnimationSequence anim)
+        {
+            Symbol = symbol;
+            Name = name;
+            ReverseBindingMatrix = revbind;
+            InitialPose = initialpose;
+            Children = children.Select(j => j.Clone()).ToArray();
+            Animation = anim == null ? new AnimationSequence(24.0, new AnimationFrame[0], 0) : anim.Clone();
+        }
+
+        public Joint(Joint joint)
+            : this(joint.Symbol, joint.Name, joint.ReverseBindingMatrix, joint.InitialPose, joint.Children, joint.Animation)
+        {
+        }
 
         public Joint Clone()
         {
-            return new Joint
-            {
-                Symbol = Symbol,
-                Name = Name,
-                ReverseBindingMatrix = ReverseBindingMatrix,
-                InitialPose = InitialPose,
-                Children = Children.Select(j => j.Clone()).ToArray(),
-                Animation = Animation.Clone()
-            };
+            return new Joint(this);
         }
 
         public IEnumerable<Joint> GetSelfAndDescendents()
@@ -42,17 +49,15 @@ namespace RS5_Extractor
             }
         }
 
+        public Joint WithTrimmedAnimation(int startframe, int numframes, double framerate)
+        {
+            AnimationSequence seq = Animation.Trim(startframe, numframes, framerate);
+            return new Joint(Symbol, Name, ReverseBindingMatrix, seq.InitialPose, Children.Select(j => j.WithTrimmedAnimation(startframe, numframes, framerate)), seq);
+        }
+
         public Joint WithoutAnimation()
         {
-            return new Joint
-            {
-                Symbol = Symbol,
-                Name = Name,
-                ReverseBindingMatrix = ReverseBindingMatrix,
-                InitialPose = InitialPose,
-                Children = Children.Select(j => j.Clone()).ToArray(),
-                Animation = Animation.WithoutAnimation()
-            };
+            return new Joint(Symbol, Name, ReverseBindingMatrix, InitialPose, Children, Animation.WithoutAnimation());
         }
     }
 }

@@ -7,9 +7,16 @@ namespace RS5_Extractor
 {
     public struct TextureCoordinate
     {
-        public Texture Texture { get; set; }
-        public double U { get; set; }
-        public double V { get; set; }
+        public readonly Texture Texture;
+        public readonly double U;
+        public readonly double V;
+
+        public TextureCoordinate(Texture texture, double U, double V)
+        {
+            this.Texture = texture;
+            this.U = U;
+            this.V = V;
+        }
 
         public override int GetHashCode()
         {
@@ -18,7 +25,7 @@ namespace RS5_Extractor
 
         public override bool Equals(object obj)
         {
-            if (obj is TextureCoordinate)
+            if (obj != null && obj is TextureCoordinate)
             {
                 TextureCoordinate val = (TextureCoordinate)obj;
                 return val.U == U && val.V == V && val.Texture == Texture;

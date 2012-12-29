@@ -9,604 +9,458 @@ using System.Xml.Linq;
 
 namespace RS5_Extractor
 {
-    public abstract class Model
+    public class Model
     {
-        protected RS5Chunk Chunk;
+        #region ModelBase
 
-        private Mesh _Mesh;
-        public Mesh Mesh
+        protected abstract class ModelBase
         {
-            get
+            public readonly IEnumerable<Triangle> Triangles;
+            public readonly Joint RootJoint;
+            public readonly byte[] ExtraData;
+
+            protected ModelBase(IEnumerable<Triangle> Triangles, Joint RootJoint, byte[] ExtraData)
             {
-                if (_Mesh == null)
+                this.Triangles = Triangles;
+                this.RootJoint = RootJoint;
+                this.ExtraData = ExtraData;
+            }
+
+            public static ModelBase Create(RS5DirectoryEntry dirent)
+            {
+                RS5Chunk chunk = dirent.GetData();
+
+                if (dirent.Type == "IMDL")
                 {
-                    FillModel();
+                    return ImmobileModel.Create(chunk);
                 }
-                return _Mesh;
-            }
-            private set
-            {
-                _Mesh = value;
-            }
-        }
-
-        public IEnumerable<Joint> Joints
-        {
-            get
-            {
-                return RootJoint == null ? new Joint[0] : RootJoint.GetSelfAndDescendents();
-            }
-        }
-
-        public IEnumerable<AnimationSequence> Animations
-        {
-            get
-            {
-                return Joints.Select(j => j.Animation).Where(a => a != null);
-            }
-        }
-
-        private Joint _RootJoint;
-        public Joint RootJoint
-        {
-            get
-            {
-                if (_RootJoint == null && _Mesh == null)
+                else if (dirent.Type == "AMDL")
                 {
-                    FillModel();
+                    return AnimatedModel.Create(chunk);
                 }
-                return _RootJoint;
-            }
-            protected set
-            {
-                _RootJoint = value;
-            }
-        }
-
-        private byte[] _ExtraData;
-        public byte[] ExtraData
-        {
-            get
-            {
-                if (_ExtraData == null && _Mesh == null)
+                else
                 {
-                    FillModel();
+                    throw new ArgumentException("Entry does not represent a model");
                 }
-                return _ExtraData;
             }
-            protected set
+
+            public abstract ModelBase GetAnimated(int startframe, int numframes, double framerate);
+        }
+
+        protected class ImmobileModel : ModelBase
+        {
+            protected ImmobileModel(IEnumerable<Triangle> triangles, Joint rootjoint, byte[] extradata)
+                : base(triangles, rootjoint, extradata)
             {
-                _ExtraData = value;
             }
-        }
 
-        public string Name { get; private set; }
-        public DateTime ModTime { get; private set; }
-        public DateTime CreatTime { get; private set; }
-
-        protected Model(RS5DirectoryEntry dirent)
-        {
-            this.Chunk = dirent.Data;
-            this.Name = dirent.Name;
-            this.ModTime = dirent.ModTime;
-            this.CreatTime = dirent.ModTime;
-        }
-
-        protected Model(Model model)
-        {
-            ExtraData = model.ExtraData;
-            RootJoint = model.RootJoint.Clone();
-            Mesh = model.Mesh.Clone();
-            Chunk = model.Chunk;
-            Name = model.Name;
-            CreatTime = model.CreatTime;
-            ModTime = model.ModTime;
-            NumAnimationFrames = model.NumAnimationFrames;
-        }
-
-        public bool IsAnimated
-        {
-            get
+            public static ModelBase Create(RS5Chunk chunk)
             {
-                return Animations.Count() != 0 && NumAnimationFrames != 0;
+                Joint rootjoint = GetRootJoint(chunk);
+                IEnumerable<Triangle> triangles = GetTriangles(chunk, rootjoint);
+                byte[] extradata = GetExtraData(chunk);
+                return new ImmobileModel(triangles, rootjoint, extradata);
             }
-        }
 
-        private int? _NumAnimationFrames;
-        public int NumAnimationFrames
-        {
-            get
+            public override ModelBase GetAnimated(int startframe, int numframes, double framerate)
             {
-                if (_NumAnimationFrames == null && _Mesh == null)
+                return this;
+            }
+
+            protected static Joint GetRootJoint(RS5Chunk chunk)
+            {
+                return null;
+            }
+
+            protected static byte[] GetExtraData(RS5Chunk chunk)
+            {
+                return null;
+            }
+
+            #region Triangles
+
+            protected static Vertex GetVertex(Matrix4 transform, RS5Chunk VTXL, int index, Texture texture)
+            {
+                int vtxofs = index * 36;
+                return new Vertex(
+                    transform * new Vector4(VTXL.Data.GetSingle(vtxofs + 0), VTXL.Data.GetSingle(vtxofs + 4), VTXL.Data.GetSingle(vtxofs + 8), 1.0),
+                    transform * new Vector4((VTXL.Data[vtxofs + 14] - 0x80) / 127.0, (VTXL.Data[vtxofs + 13] - 0x80) / 127.0, (VTXL.Data[vtxofs + 12] - 0x80) / 127.0, 0.0),
+                    transform * new Vector4((VTXL.Data[vtxofs + 18] - 0x80) / 127.0, (VTXL.Data[vtxofs + 17] - 0x80) / 127.0, (VTXL.Data[vtxofs + 16] - 0x80) / 127.0, 0.0),
+                    transform * new Vector4((VTXL.Data[vtxofs + 22] - 0x80) / 127.0, (VTXL.Data[vtxofs + 21] - 0x80) / 127.0, (VTXL.Data[vtxofs + 20] - 0x80) / 127.0, 0.0),
+                    new TextureCoordinate(texture, VTXL.Data.GetSingle(vtxofs + 24), -VTXL.Data.GetSingle(vtxofs + 28)),
+                    null,
+                    VTXL.Data.GetBytes(vtxofs + 32, 4)
+                );
+            }
+
+            protected static Triangle GetTriangle(RS5Chunk TRIL, Vertex[] vertices, int index, Texture texture)
+            {
+                int triofs = index * 4;
+                int a = TRIL.Data.GetInt32(triofs + 0);
+                int b = TRIL.Data.GetInt32(triofs + 4);
+                int c = TRIL.Data.GetInt32(triofs + 8);
+                return new Triangle
                 {
-                    FillModel();
-                }
-                return _NumAnimationFrames == null ? 0 : (int)_NumAnimationFrames;
-            }
-            protected set
-            {
-                _NumAnimationFrames = value;
-            }
-        }
-
-        private int? _NumJoints;
-        public int NumJoints
-        {
-            get
-            {
-                if (_NumJoints == null && _Mesh == null)
-                {
-                    FillModel();
-                }
-                return _NumJoints == null ? 0 : (int)_NumJoints;
-            }
-            protected set
-            {
-                _NumJoints = value;
-            }
-        }
-
-        private int? _NumAnimationKeyFrames;
-        public int NumAnimationKeyFrames
-        {
-            get
-            {
-                if (_NumAnimationKeyFrames == null)
-                {
-                    
-                    HashSet<int> KeyFrames = new HashSet<int>(Animations.Select(anim => anim.Frames.Keys.Select(k => k)).Aggregate((a, v) => a.Union(v)));
-                    _NumAnimationKeyFrames = KeyFrames.Count();
-                }
-                return (int)_NumAnimationKeyFrames;
-            }
-        }
-
-        public bool IsVisible
-        {
-            get
-            {
-                return Mesh.Textures.Values.Where(t => ExcludeTexturePrefixes.Count(v => t.Name.StartsWith(v)) == 0).Count() != 0;
-            }
-        }
-
-        public bool HasMultipleTextures
-        {
-            get
-            {
-                return Mesh.Textures.Count() > 1;
-            }
-        }
-
-        public bool HasGeometry
-        {
-            get
-            {
-                return Mesh.Vertices.Count != 0;
-            }
-        }
-
-        public bool HasNormals
-        {
-            get
-            {
-                return HasGeometry && Mesh.Vertices.First().Normal != Vector4.Zero;
-            }
-        }
-
-        public bool HasTangents
-        {
-            get
-            {
-                return HasGeometry && Mesh.Vertices.First().Tangent != Vector4.Zero;
-            }
-        }
-
-        public bool HasBinormals
-        {
-            get
-            {
-                return HasGeometry && Mesh.Vertices.First().Binormal != Vector4.Zero;
-            }
-        }
-
-        public bool HasSkeleton
-        {
-            get
-            {
-                return RootJoint != null;
-            }
-        }
-        
-        public string ColladaMultimeshFilename
-        {
-            get
-            {
-                return ".\\" + Name + ".multimesh.dae";
-            }
-        }
-
-        protected string[] ExcludeTexturePrefixes = new string[]
-        {
-            "TEX\\CX",
-            "TEX\\CCX",
-            "TEX\\LX",
-            "TEX\\SPECIAL"
-        };
-
-        protected void Save(IEnumerable<List<Triangle>> meshes, Joint rootjoint, string filename)
-        {
-            string dir = Path.GetDirectoryName(filename);
-            if (!Directory.Exists(dir))
-            {
-                Directory.CreateDirectory(dir);
+                    A = vertices[a],
+                    B = vertices[b],
+                    C = vertices[c],
+                    Texture = texture
+                };
             }
 
-            XDocument doc = new Collada(meshes, rootjoint, Name, CreatTime, ModTime);
-            doc.Save(filename);
-            File.SetLastWriteTimeUtc(filename, ModTime);
-        }
-
-        public void SaveMultimesh()
-        {
-            string filename = ".\\" + Name + ".multimesh.dae";
-            Save(GetSubMeshes(), null, filename);
-        }
-
-        public void SaveAnimation(string animname)
-        {
-            string filename = ".\\" + Name + ".anim." + animname + ".dae";
-            Save(GetFiltered(), RootJoint, filename);
-        }
-
-        public void SaveUnanimated()
-        {
-            string filename = ".\\" + Name + ".noanim.dae";
-            Save(GetFiltered(), RootJoint == null ? null : RootJoint.WithoutAnimation(), filename);
-        }
-
-        protected abstract Model Clone();
-
-        public Model GetAnimatedModel(int startframe, int numframes, float framerate)
-        {
-            Model model = this.Clone();
-            foreach (Joint joint in model.RootJoint.GetSelfAndDescendents())
+            protected static IEnumerable<Triangle> GetTextureTriangles(Matrix4 transform, RS5Chunk BHDR, RS5Chunk VTXL, RS5Chunk TRIL, int index)
             {
-                joint.Animation = joint.Animation.Trim(startframe, numframes, framerate);
-            }
-            model.NumAnimationFrames = numframes;
-            return model;
-        }
-
-        public IEnumerable<List<Triangle>> GetSubMeshes()
-        {
-            return Mesh.Textures.Select(tex => Mesh.Triangles.Where(tri => tri.Texture.Name == tex.Value.Name).ToList());
-        }
-
-        public IEnumerable<List<Triangle>> GetFiltered()
-        {
-            return new[] { Mesh.Triangles.Where(t => ExcludeTexturePrefixes.Where(x => t.Texture.Name.StartsWith(x, StringComparison.InvariantCultureIgnoreCase)).Count() == 0).ToList() };
-        }
-
-        private void FillModel()
-        {
-            _Mesh = new Mesh();
-            _NumAnimationFrames = 0;
-            FillModelImpl();
-        }
-
-        protected abstract void FillModelImpl();
-    }
-
-    public class ImmobileModel : Model
-    {
-        public ImmobileModel(RS5DirectoryEntry dirent)
-            : base(dirent)
-        {
-        }
-
-        protected ImmobileModel(ImmobileModel model)
-            : base(model)
-        {
-        }
-
-        protected override Model Clone()
-        {
-            return new ImmobileModel(this);
-        }
-
-        protected override void FillModelImpl()
-        {
-            RS5Chunk BHDR = Chunk.Chunks["BHDR"];
-            RS5Chunk VTXL = Chunk.Chunks["VTXL"];
-            RS5Chunk TRIL = Chunk.Chunks["TRIL"];
-
-            Matrix4 roottransform = new Matrix4
-            {
-                { -1, 0, 0, 0 },
-                { 0, 1, 0, 0 },
-                { 0, 0, 1, 0 },
-                { 0, 0, 0, 1 }
-            };
-
-            for (int texnum = 0; texnum < BHDR.Data.Count / 144; texnum++)
-            {
-                int texofs = texnum * 144;
-                string texsym = String.Format("texture{0}", texnum);
+                int texofs = index * 144;
                 string texname = BHDR.Data.GetString(texofs, 128);
                 int firstvtx = BHDR.Data.GetInt32(texofs + 128);
                 int numvtx = BHDR.Data.GetInt32(texofs + 136);
                 int firsttri = BHDR.Data.GetInt32(texofs + 132);
                 int numtri = BHDR.Data.GetInt32(texofs + 140);
                 Texture texture = Texture.GetTexture(texname);
-
-                Mesh.Textures.Add(texsym, texture);
-
-                int startvtx = Mesh.Vertices.Count;
-                for (int vtxnum = firstvtx; vtxnum < firstvtx + numvtx; vtxnum++)
-                {
-                    int vtxofs = vtxnum * 36;
-                    Mesh.Vertices.Add(new Vertex
-                    {
-                        Position = roottransform * new Vector4
-                        {
-                            X = VTXL.Data.GetSingle(vtxofs + 0),
-                            Y = VTXL.Data.GetSingle(vtxofs + 4),
-                            Z = VTXL.Data.GetSingle(vtxofs + 8),
-                            W = 1.0
-                        },
-                        TexCoord = new TextureCoordinate
-                        {
-                            U = VTXL.Data.GetSingle(vtxofs + 24),
-                            V = -VTXL.Data.GetSingle(vtxofs + 28),
-                            Texture = texture
-                        },
-                        Normal = roottransform * new Vector4
-                        {
-                            X = (VTXL.Data[vtxofs + 14] - 0x80) / 127.0,
-                            Y = (VTXL.Data[vtxofs + 13] - 0x80) / 127.0,
-                            Z = (VTXL.Data[vtxofs + 12] - 0x80) / 127.0,
-                            W = 0.0
-                        },
-                        Tangent = roottransform * new Vector4
-                        {
-                            X = (VTXL.Data[vtxofs + 18] - 0x80) / 127.0,
-                            Y = (VTXL.Data[vtxofs + 17] - 0x80) / 127.0,
-                            Z = (VTXL.Data[vtxofs + 16] - 0x80) / 127.0,
-                            W = 0.0
-                        },
-                        Binormal = roottransform * new Vector4
-                        {
-                            X = (VTXL.Data[vtxofs + 22] - 0x80) / 127.0,
-                            Y = (VTXL.Data[vtxofs + 21] - 0x80) / 127.0,
-                            Z = (VTXL.Data[vtxofs + 20] - 0x80) / 127.0,
-                            W = 0.0
-                        },
-                        ExtraData = VTXL.Data.GetBytes(vtxofs + 32, 4)
-                    });
-                }
-
-                for (int trinum = firsttri; trinum < firsttri + numtri - 2; trinum += 3)
-                {
-                    int triofs = trinum * 4;
-                    int a = TRIL.Data.GetInt32(triofs + 0) + startvtx;
-                    int b = TRIL.Data.GetInt32(triofs + 4) + startvtx;
-                    int c = TRIL.Data.GetInt32(triofs + 8) + startvtx;
-                    Mesh.Triangles.Add(new Triangle
-                    {
-                        A = Mesh.Vertices[a],
-                        B = Mesh.Vertices[b],
-                        C = Mesh.Vertices[c],
-                        Texture = texture
-                    });
-                }
-            }
-        }
-    }
-
-    public class AnimatedModel : Model
-    {
-        public AnimatedModel(RS5DirectoryEntry dirent)
-            : base(dirent)
-        {
-        }
-
-        protected AnimatedModel(AnimatedModel model)
-            : base(model)
-        {
-        }
-
-        protected override Model Clone()
-        {
-            return new AnimatedModel(this);
-        }
-
-        protected override void FillModelImpl()
-        {
-            RS5Chunk BLKS = Chunk.Chunks["BLKS"];
-            RS5Chunk VTXS = Chunk.Chunks["VTXS"];
-            RS5Chunk INDS = Chunk.Chunks["INDS"];
-            RS5Chunk JNTS = Chunk.Chunks.ContainsKey("JNTS") ? Chunk.Chunks["JNTS"] : null;
-            RS5Chunk FRMS = Chunk.Chunks.ContainsKey("FRMS") ? Chunk.Chunks["FRMS"] : null;
-
-            Matrix4 roottransform = new Matrix4
-            {
-                { 1, 0, 0, 0 },
-                { 0, 0, -1, 0 },
-                { 0, 1, 0, 0 },
-                { 0, 0, 0, 1 }
-            };
-
-            Joint[] joints = new Joint[0];
-            NumJoints = 0;
-
-            if (JNTS != null)
-            {
-                NumJoints = JNTS.Data.Count / 196;
-                NumAnimationFrames = (FRMS != null && FRMS.Data != null) ? FRMS.Data.Count / (NumJoints * 64) : 0;
-                joints = new Joint[NumJoints];
-                int[] parents = new int[NumJoints];
-                int rootjointnum = -1;
-
-                for (int jntnum = 0; jntnum < NumJoints; jntnum++)
-                {
-                    int jntofs = jntnum * 196;
-                    int parent = JNTS.Data.GetInt32(jntofs + 192);
-                    string jntsym = String.Format("joint{0}", jntnum);
-                    Matrix4 revbindmatrix = new Matrix4
-                    {
-                        { JNTS.Data.GetSingle(jntofs + 128), JNTS.Data.GetSingle(jntofs + 144), JNTS.Data.GetSingle(jntofs + 160), JNTS.Data.GetSingle(jntofs + 176) },
-                        { JNTS.Data.GetSingle(jntofs + 132), JNTS.Data.GetSingle(jntofs + 148), JNTS.Data.GetSingle(jntofs + 164), JNTS.Data.GetSingle(jntofs + 180) },
-                        { JNTS.Data.GetSingle(jntofs + 136), JNTS.Data.GetSingle(jntofs + 152), JNTS.Data.GetSingle(jntofs + 168), JNTS.Data.GetSingle(jntofs + 184) },
-                        { JNTS.Data.GetSingle(jntofs + 140), JNTS.Data.GetSingle(jntofs + 156), JNTS.Data.GetSingle(jntofs + 172), JNTS.Data.GetSingle(jntofs + 188) }
-                    };
-
-                    revbindmatrix /= roottransform;
-
-                    Joint joint = new Joint
-                    {
-                        Name = JNTS.Data.GetString(jntofs, 128),
-                        ReverseBindingMatrix = revbindmatrix,
-                        Symbol = jntsym
-                    };
-
-                    if (parent == -1)
-                    {
-                        rootjointnum = jntnum;
-                    }
-
-                    if (FRMS != null && FRMS.Data != null)
-                    {
-
-                        AnimationSequence anim = new AnimationSequence();
-                        for (int frameno = 0; frameno < NumAnimationFrames; frameno++)
-                        {
-                            int frameofs = (frameno * NumJoints + jntnum) * 64;
-                            Matrix4 transform = new Matrix4
-                        {
-                            { FRMS.Data.GetSingle(frameofs +  0), FRMS.Data.GetSingle(frameofs + 16), FRMS.Data.GetSingle(frameofs + 32), FRMS.Data.GetSingle(frameofs + 48) },
-                            { FRMS.Data.GetSingle(frameofs +  4), FRMS.Data.GetSingle(frameofs + 20), FRMS.Data.GetSingle(frameofs + 36), FRMS.Data.GetSingle(frameofs + 52) },
-                            { FRMS.Data.GetSingle(frameofs +  8), FRMS.Data.GetSingle(frameofs + 24), FRMS.Data.GetSingle(frameofs + 40), FRMS.Data.GetSingle(frameofs + 56) },
-                            { FRMS.Data.GetSingle(frameofs + 12), FRMS.Data.GetSingle(frameofs + 28), FRMS.Data.GetSingle(frameofs + 44), FRMS.Data.GetSingle(frameofs + 60) }
-                        };
-
-                            if (parent == -1)
-                            {
-                                transform = roottransform * transform;
-                            }
-
-                            anim.Frames.Add(frameno, transform);
-                        }
-                        joint.Animation = anim.Trim(0, anim.Frames.Count, 24.0);
-                    }
-                    else
-                    {
-                        joint.Animation = new AnimationSequence { FrameRate = 24.0, InitialPose = joint.InitialPose, Frames = new SortedDictionary<int, Matrix4>() };
-                    }
-
-                    joints[jntnum] = joint;
-                }
-
-                for (int i = 0; i < joints.Length; i++)
-                {
-                    Joint joint = joints[i];
-                    joint.Children = joints.Where((j,n) => parents[n] == i).ToArray();
-                    if (i == rootjointnum)
-                    {
-                        joint.InitialPose = 1 / joint.ReverseBindingMatrix;
-                    }
-                    else
-                    {
-                        joint.InitialPose = joints[parents[i]].ReverseBindingMatrix / joint.ReverseBindingMatrix;
-                    }
-                }
-
-                RootJoint = joints[rootjointnum];
+                Vertex[] vertices = Enumerable.Range(0, numvtx).Select(i => GetVertex(transform, VTXL, i + firstvtx, texture)).ToArray();
+                return Enumerable.Range(0, numtri / 3).Select(i => GetTriangle(TRIL, vertices, i * 3 + firsttri, texture));
             }
 
-            for (int texnum = 0; texnum < BLKS.Data.Count / 144; texnum++)
+            protected static Triangle[] GetTriangles(RS5Chunk chunk, Joint RootJoint)
             {
-                int texofs = texnum * 144;
-                string texsym = String.Format("texture{0}", texnum);
+                RS5Chunk BHDR = chunk.Chunks["BHDR"];
+                RS5Chunk VTXL = chunk.Chunks["VTXL"];
+                RS5Chunk TRIL = chunk.Chunks["TRIL"];
+
+                Matrix4 roottransform = new Matrix4(-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+                int numtextures = (BHDR == null || BHDR.Data == null) ? 0 : BHDR.Data.Count / 144;
+
+                return Enumerable.Range(0, numtextures).SelectMany(i => GetTextureTriangles(roottransform, BHDR, VTXL, TRIL, i)).ToArray();
+            }
+
+            #endregion
+        }
+
+        protected class AnimatedModel : ModelBase
+        {
+            protected static readonly Matrix4 RootTransform = new Matrix4(1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1);
+
+            protected AnimatedModel(IEnumerable<Triangle> triangles, Joint rootjoint, byte[] extradata)
+                : base(triangles, rootjoint, extradata)
+            {
+            }
+
+            public static ModelBase Create(RS5Chunk chunk)
+            {
+                Joint rootjoint = GetRootJoint(chunk);
+                IEnumerable<Triangle> triangles = GetTriangles(chunk, rootjoint);
+                byte[] extradata = GetExtraData(chunk);
+                return new AnimatedModel(triangles, rootjoint, extradata);
+            }
+
+            public override ModelBase GetAnimated(int startframe, int numframes, double framerate)
+            {
+                return new AnimatedModel(new List<Triangle>(Triangles), RootJoint.WithTrimmedAnimation(startframe, numframes, framerate), ExtraData.ToArray());
+            }
+
+            #region Joints
+
+            protected class JointData
+            {
+                public readonly string Name;
+                public readonly Matrix4 ReverseBindingMatrix;
+                public readonly int Parent;
+                public readonly int Index;
+                public readonly Matrix4[] AnimationFrames;
+
+                public JointData(RS5Chunk JNTS, RS5Chunk FRMS, int numjoints, int numframes, int index)
+                {
+                    int offset = index * 196;
+                    Index = index;
+                    Name = JNTS.Data.GetString(offset, 128);
+                    ReverseBindingMatrix = JNTS.Data.GetMatrix4(offset + 128);
+                    Parent = JNTS.Data.GetInt32(offset + 192);
+                    AnimationFrames = Enumerable.Range(0, numframes).Select(j => FRMS.Data.GetMatrix4((j * numjoints + index) * 64)).ToArray();
+                }
+            }
+
+            protected class IndexedJoint : Joint
+            {
+                public readonly int Index;
+
+                public IndexedJoint(int index, string symbol, string name, Matrix4 revbind, Matrix4 initialpose, IEnumerable<Joint> children, AnimationSequence anim)
+                    : base(symbol, name, revbind, initialpose, children, anim)
+                {
+                    Index = index;
+                }
+            }
+
+            protected static AnimationSequence GetAnimation(Matrix4 transform, double framerate, Matrix4 initialpose, Matrix4[] animframes)
+            {
+                return new AnimationSequence(framerate, initialpose, animframes.Select((f, i) => new AnimationFrame(i, f / transform)), animframes.Length);
+            }
+
+            protected static Joint GetJoint(Matrix4 transform, JointData[] jointdata, int index)
+            {
+                Matrix4 revbind = jointdata[index].ReverseBindingMatrix / transform;
+                Matrix4 initialpose = 1 / revbind;
+                return new IndexedJoint(
+                    index,
+                    String.Format("joint{0}", index),
+                    jointdata[index].Name,
+                    revbind,
+                    initialpose,
+                    jointdata.Where(j => j.Parent == index).Select(j => GetJoint(Matrix4.Identity, jointdata, j.Index)),
+                    GetAnimation(transform, 24.0, initialpose, jointdata[index].AnimationFrames)
+                );
+            }
+
+            protected static Joint GetRootJoint(RS5Chunk chunk)
+            {
+                RS5Chunk JNTS = chunk.Chunks.ContainsKey("JNTS") ? chunk.Chunks["JNTS"] : null;
+                RS5Chunk FRMS = chunk.Chunks.ContainsKey("FRMS") ? chunk.Chunks["FRMS"] : null;
+
+                if (JNTS != null)
+                {
+                    int numjoints = JNTS.Data.Count / 196;
+                    int numframes = (FRMS != null && FRMS.Data != null) ? FRMS.Data.Count / (numjoints * 64) : 0;
+
+                    JointData[] jointdata = Enumerable.Range(0, numjoints).Select(i => new JointData(JNTS, FRMS, numjoints, numframes, i)).ToArray();
+
+                    return GetJoint(RootTransform, jointdata, jointdata.Where(j => j.Parent == -1).Single().Index);
+                }
+                else
+                {
+                    return null;
+                }
+            }
+
+            #endregion
+
+            #region Triangles
+
+            protected static JointInfluence GetJointInfluence(byte jointnum, byte influence, Joint[] joints)
+            {
+                return (influence != 0 && jointnum < joints.Length) ? new JointInfluence(joints[jointnum], influence / 255.0) : null;
+            }
+
+            protected static Vertex GetVertex(Matrix4 transform, RS5Chunk VTXS, int index, Texture texture, Joint[] joints)
+            {
+                int vtxofs = index * 32;
+                return new Vertex(
+                    transform * new Vector4(VTXS.Data.GetSingle(vtxofs + 0), VTXS.Data.GetSingle(vtxofs + 4), VTXS.Data.GetSingle(vtxofs + 8), 1.0),
+                    transform * new Vector4((VTXS.Data[vtxofs + 22] - 0x80) / 127.0, (VTXS.Data[vtxofs + 21] - 0x80) / 127.0, (VTXS.Data[vtxofs + 20] - 0x80) / 127.0, 0.0),
+                    Vector4.Zero,
+                    Vector4.Zero,
+                    new TextureCoordinate(texture, VTXS.Data.GetSingle(vtxofs + 12), -VTXS.Data.GetSingle(vtxofs + 16)),
+                    Enumerable.Range(0, 4).Select(i => GetJointInfluence(VTXS.Data[vtxofs + 24 + i], VTXS.Data[vtxofs + 28 + i], joints)).Where(j => j != null),
+                    null
+                );
+            }
+
+            protected static Triangle GetTriangle(RS5Chunk TRIL, Vertex[] vertices, int index, int firstvtx, Texture texture)
+            {
+                int triofs = index * 4;
+                int a = TRIL.Data.GetInt32(triofs + 0) - firstvtx;
+                int b = TRIL.Data.GetInt32(triofs + 4) - firstvtx;
+                int c = TRIL.Data.GetInt32(triofs + 8) - firstvtx;
+                return new Triangle
+                {
+                    A = vertices[a],
+                    B = vertices[b],
+                    C = vertices[c],
+                    Texture = texture
+                };
+            }
+
+            protected static IEnumerable<Triangle> GetTextureTriangles(Matrix4 transform, RS5Chunk BLKS, RS5Chunk VTXS, RS5Chunk INDS, int index, Joint[] joints)
+            {
+                int texofs = index * 144;
                 string texname = BLKS.Data.GetString(texofs, 128);
                 int firstvtx = BLKS.Data.GetInt32(texofs + 128);
                 int endvtx = BLKS.Data.GetInt32(texofs + 132);
+                int numvtx = endvtx - firstvtx;
                 int firsttri = BLKS.Data.GetInt32(texofs + 136);
                 int endtri = BLKS.Data.GetInt32(texofs + 140);
+                int numtri = endtri - firsttri;
                 Texture texture = Texture.GetTexture(texname);
-
-                Mesh.Textures.Add(texsym, texture);
-
-                int startvtx = Mesh.Vertices.Count;
-                for (int vtxnum = firstvtx; vtxnum < endvtx; vtxnum++)
-                {
-                    int vtxofs = vtxnum * 32;
-                    Vertex vertex = new Vertex
-                    {
-                        Position = roottransform * new Vector4
-                        {
-                            X = VTXS.Data.GetSingle(vtxofs + 0),
-                            Y = VTXS.Data.GetSingle(vtxofs + 4),
-                            Z = VTXS.Data.GetSingle(vtxofs + 8),
-                            W = 1.0
-                        },
-                        TexCoord = new TextureCoordinate
-                        {
-                            U = VTXS.Data.GetSingle(vtxofs + 12),
-                            V = -VTXS.Data.GetSingle(vtxofs + 16),
-                            Texture = texture
-                        },
-                        Normal = roottransform * new Vector4
-                        {
-                            X = (VTXS.Data[vtxofs + 22] - 0x80) / 127.0,
-                            Y = (VTXS.Data[vtxofs + 21] - 0x80) / 127.0,
-                            Z = (VTXS.Data[vtxofs + 20] - 0x80) / 127.0,
-                            W = 0.0
-                        }
-                    };
-
-                    List<JointInfluence> influences = new List<JointInfluence>();
-
-                    if (NumJoints != 0)
-                    {
-                        for (int i = 0; i < 4; i++)
-                        {
-                            double influence = VTXS.Data[vtxofs + 28 + i] / 255.0;
-                            int jointnum = VTXS.Data[vtxofs + 24 + i];
-
-                            if (influence != 0 && jointnum < NumJoints)
-                            {
-                                JointInfluence jntinfluence = new JointInfluence
-                                {
-                                    Joint = joints[jointnum],
-                                    Influence = influence
-                                };
-
-                                influences.Add(jntinfluence);
-                            }
-                        }
-                    }
-
-                    vertex.JointInfluence = influences.ToArray();
-
-                    Mesh.Vertices.Add(vertex);
-                }
-
-                for (int trinum = firsttri; trinum < endtri - 2; trinum += 3)
-                {
-                    int triofs = trinum * 4;
-                    int a = INDS.Data.GetInt32(triofs + 0) - firstvtx + startvtx;
-                    int b = INDS.Data.GetInt32(triofs + 4) - firstvtx + startvtx;
-                    int c = INDS.Data.GetInt32(triofs + 8) - firstvtx + startvtx;
-                    Mesh.Triangles.Add(new Triangle
-                    {
-                        A = Mesh.Vertices[a],
-                        B = Mesh.Vertices[b],
-                        C = Mesh.Vertices[c],
-                        Texture = texture
-                    });
-                }
+                Vertex[] vertices = Enumerable.Range(0, numvtx).Select(i => GetVertex(transform, VTXS, i + firstvtx, texture, joints)).ToArray();
+                return Enumerable.Range(0, numtri / 3).Select(i => GetTriangle(INDS, vertices, i * 3 + firsttri, firstvtx, texture));
             }
 
+            protected static Triangle[] GetTriangles(RS5Chunk chunk, Joint rootjoint)
+            {
+                RS5Chunk BLKS = chunk.Chunks["BLKS"];
+                RS5Chunk VTXS = chunk.Chunks["VTXS"];
+                RS5Chunk INDS = chunk.Chunks["INDS"];
+
+                IndexedJoint[] joints = rootjoint.GetSelfAndDescendents().OfType<IndexedJoint>().OrderBy(j => j.Index).ToArray();
+
+                int numtextures = (BLKS == null || BLKS.Data == null) ? 0 : BLKS.Data.Count / 144;
+
+                return Enumerable.Range(0, numtextures).SelectMany(i => GetTextureTriangles(RootTransform, BLKS, VTXS, INDS, i, joints)).ToArray();
+            }
+
+            #endregion
+
+            protected static byte[] GetExtraData(RS5Chunk chunk)
+            {
+                return null;
+            }
         }
+        
+        #endregion
+
+        private readonly static string[] ExcludeTexturePrefixes = new string[] { "TEX\\CX", "TEX\\CCX", "TEX\\LX", "TEX\\SPECIAL" };
+
+        public readonly string Name;
+        public readonly DateTime ModTime;
+        public readonly DateTime CreatTime;
+
+        #region Lazy-init property backing
+
+        private Lazy<ModelBase> _ModelData;
+        private Lazy<Vertex[]> _Vertices;
+        private Lazy<Texture[]> _Textures;
+        private Lazy<Joint[]> _Joints;
+        private Lazy<AnimationSequence[]> _Animations;
+        private Lazy<bool> _IsVisible;
+        private Lazy<bool> _IsAnimated;
+        private Lazy<bool> _HasMultipleTextures;
+        private Lazy<bool> _HasGeometry;
+        private Lazy<bool> _HasNormals;
+        private Lazy<bool> _HasTangents;
+        private Lazy<bool> _HasBinormals;
+        private Lazy<bool> _HasSkeleton;
+        private Lazy<int> _NumJoints;
+        private Lazy<int> _NumAnimationFrames;
+        private Lazy<int> _NumAnimationKeyFrames;
+        
+        #endregion
+
+        #region Lazy-init properties
+
+        protected ModelBase ModelData { get { return _ModelData.Value; } }
+        public IEnumerable<Triangle> Triangles { get { return ModelData.Triangles; } }
+        public Joint RootJoint { get { return ModelData.RootJoint; } }
+        public byte[] ExtraData { get { return ModelData.ExtraData; } }
+        public IEnumerable<Vertex> Vertices { get { return _Vertices.Value; } }
+        public IEnumerable<Texture> Textures { get { return _Textures.Value; } }
+        public IEnumerable<Joint> Joints { get { return _Joints.Value; } }
+        public IEnumerable<AnimationSequence> Animations { get { return _Animations.Value; } }
+        public bool IsVisible { get { return _IsVisible.Value; } }
+        public bool IsAnimated { get { return _IsAnimated.Value; } }
+        public bool HasMultipleTextures { get { return _HasMultipleTextures.Value; } }
+        public bool HasGeometry { get { return _HasGeometry.Value; } }
+        public bool HasNormals { get { return _HasNormals.Value; } }
+        public bool HasTangents { get { return _HasTangents.Value; } }
+        public bool HasBinormals { get { return _HasBinormals.Value; } }
+        public bool HasSkeleton { get { return _HasSkeleton.Value; } }
+        public int NumJoints { get { return _NumJoints.Value; } }
+        public int NumAnimationFrames { get { return _NumAnimationFrames.Value; } }
+        public int NumAnimationKeyFrames { get { return _NumAnimationKeyFrames.Value; } }
+        
+        #endregion
+
+        #region Constructors
+
+        private Model()
+        {
+            this._Vertices = new Lazy<Vertex[]>(() => Triangles.SelectMany(t => t).Union(new Vertex[0]).ToArray());
+            this._Textures = new Lazy<Texture[]>(() => Triangles.Select(t => t.Texture).Union(new Texture[0]).ToArray());
+            this._Joints = new Lazy<Joint[]>(() => RootJoint == null ? new Joint[0] : RootJoint.GetSelfAndDescendents().ToArray());
+            this._Animations = new Lazy<AnimationSequence[]>(() => Joints.Select(j => j.Animation).ToArray());
+            this._IsVisible = new Lazy<bool>(() => Textures.Where(t => ExcludeTexturePrefixes.Count(v => t.Name.StartsWith(v)) == 0).Count() != 0);
+            this._IsAnimated = new Lazy<bool>(() => Animations.Count() != 0 && NumAnimationKeyFrames != 0);
+            this._HasMultipleTextures = new Lazy<bool>(() => Textures.Count() > 1);
+            this._HasGeometry = new Lazy<bool>(() => Triangles.Count() != 0);
+            this._HasNormals = new Lazy<bool>(() => HasGeometry && Vertices.First().Normal != Vector4.Zero);
+            this._HasTangents = new Lazy<bool>(() => HasGeometry && Vertices.First().Tangent != Vector4.Zero);
+            this._HasBinormals = new Lazy<bool>(() => HasGeometry && Vertices.First().Binormal != Vector4.Zero);
+            this._HasSkeleton = new Lazy<bool>(() => RootJoint != null);
+            this._NumJoints = new Lazy<int>(() => Joints.Count());
+            this._NumAnimationFrames = new Lazy<int>(() => Animations.Select(a => a.NumFrames).Union(new[] { 0 }).Max());
+            this._NumAnimationKeyFrames = new Lazy<int>(() => Animations.Select(anim => anim.Frames.Select(f => f.FrameNum)).Aggregate((a, v) => a.Union(v)).Count());
+        }
+
+        public Model(RS5DirectoryEntry dirent)
+            : this()
+        {
+            this.Name = dirent.Name;
+            this.ModTime = dirent.ModTime;
+            this.CreatTime = dirent.ModTime;
+            this._ModelData = new Lazy<ModelBase>(() => ModelBase.Create(dirent));
+        }
+
+        protected Model(Model model, Func<ModelBase> modeldata)
+            : this()
+        {
+            this.Name = model.Name;
+            this.CreatTime = model.CreatTime;
+            this.ModTime = model.ModTime;
+            this._ModelData = new Lazy<ModelBase>(modeldata);
+        }
+        
+        #endregion
+
+        #region Model exporting
+
+        public Collada.Exporter CreateMultimeshExporter(bool overwrite)
+        {
+            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".multimesh.dae", () => HasMultipleTextures, () => GetSubMeshes(), () => null, CreatTime, ModTime, overwrite);
+        }
+
+        public Collada.Exporter<T> CreateMultimeshExporter<T>(bool overwrite, T state)
+        {
+            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".multimesh.dae", () => HasMultipleTextures, () => GetSubMeshes(), () => null, CreatTime, ModTime, overwrite, state);
+        }
+
+        public Collada.Exporter CreateUnanimatedExporter(bool overwrite)
+        {
+            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".noanim..dae", () => true, () => GetFiltered(), () => RootJoint == null ? null : RootJoint.WithoutAnimation(), CreatTime, ModTime, overwrite);
+        }
+
+        public Collada.Exporter<T> CreateUnanimatedExporter<T>(bool overwrite, T state)
+        {
+            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".noanim..dae", () => true, () => GetFiltered(), () => RootJoint == null ? null : RootJoint.WithoutAnimation(), CreatTime, ModTime, overwrite, state);
+        }
+
+        public Collada.Exporter CreateAnimatedExporter(string animname, bool overwrite)
+        {
+            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => IsAnimated, () => GetFiltered(), () => RootJoint, CreatTime, ModTime, overwrite);
+        }
+
+        public Collada.Exporter<T> CreateAnimatedExporter<T>(string animname, bool overwrite, T state)
+        {
+            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => IsAnimated, () => GetFiltered(), () => RootJoint, CreatTime, ModTime, overwrite, state);
+        }
+
+        public Collada.Exporter CreateTrimmedAnimatedExporter(string animname, int startframe, int numframes, double framerate, bool overwrite)
+        {
+            Model model = GetAnimatedModel(startframe, numframes, framerate);
+            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => model.IsAnimated, () => model.GetFiltered(), () => model.RootJoint, model.CreatTime, model.ModTime, overwrite);
+        }
+
+        public Collada.Exporter<T> CreateTrimmedAnimatedExporter<T>(string animname, int startframe, int numframes, double framerate, bool overwrite, T state)
+        {
+            Model model = GetAnimatedModel(startframe, numframes, framerate);
+            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => model.IsAnimated, () => model.GetFiltered(), () => model.RootJoint, model.CreatTime, model.ModTime, overwrite, state);
+        }
+
+        #endregion
+
+        #region Model filtering
+        
+        public Model GetAnimatedModel(int startframe, int numframes, double framerate)
+        {
+            return new Model(this, () => ModelData.GetAnimated(startframe, numframes, framerate));
+        }
+
+        public IEnumerable<List<Triangle>> GetSubMeshes()
+        {
+            return Textures.Select(tex => Triangles.Where(tri => tri.Texture.Name == tex.Name).ToList());
+        }
+
+        public IEnumerable<List<Triangle>> GetFiltered()
+        {
+            return new[] { Triangles.Where(t => ExcludeTexturePrefixes.Where(x => t.Texture.Name.StartsWith(x, StringComparison.InvariantCultureIgnoreCase)).Count() == 0).ToList() };
+        }
+        
+        #endregion
     }
 }

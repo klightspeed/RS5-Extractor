@@ -191,21 +191,43 @@ namespace RS5_Extractor
             {
                 Texture.AddTexture(dirent.Value);
                 Texture texture = Texture.GetTexture(dirent.Key);
-                if (!File.Exists(texture.PNGFilename) && !File.Exists(texture.DDSFilename))
+                if (!texture.TextureFileExists())
                 {
-                    Console.WriteLine("Saving texture {0}", dirent.Key);
-                    texture.SavePNG();
-                    texture.SaveDDS();
+                    Console.Write("Saving texture {0}", dirent.Key);
+
+                    texture.SaveImage();
+                    Console.WriteLine("{0}  ({1} x {2})  {3}kiB", Path.GetExtension(texture.Filename), texture.Width, texture.Height, (new FileInfo(texture.Filename).Length + 1023) / 1024);
+                    if (texture.Image.FailureReason != null)
+                    {
+                        Console.WriteLine("  Reason: {0}", texture.Image.FailureReason);
+                    }
+
+                    if (texture.Image.IntensityFactor != 1.0)
+                    {
+                        Console.WriteLine("  Intensity: {0}", texture.Image.IntensityFactor);
+                    }
+
+                    if (!texture.IsLossless && Path.GetExtension(texture.Filename) != ".dds")
+                    {
+                        Console.Write("Saving DDS texture {0}", dirent.Key);
+                        texture.SaveDDS();
+                        Console.WriteLine(".dds  ({0} x {1})  {2}kiB", texture.Width, texture.Height, (new FileInfo(texture.DDSFilename).Length + 1023) / 1024);
+                        Console.WriteLine("  Reason: DDS couldn't be faithfully converted", texture.Image.FourCC);
+                    }
+
+                    texture.Flush();
                 }
             }
 
             Console.WriteLine("Processing Immobile Models ... ");
             foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in main_rs5.Where(d => d.Value.Type == "IMDL"))
             {
-                ImmobileModel model = new ImmobileModel(dirent.Value);
-                if (!File.Exists(model.ColladaMultimeshFilename))
+                Model model = new Model(dirent.Value);
+                Collada.Exporter multimeshexporter = model.CreateMultimeshExporter(false);
+                Collada.Exporter unanimatedexporter = model.CreateUnanimatedExporter(false);
+                if (!File.Exists(multimeshexporter.Filename) || !File.Exists(unanimatedexporter.Filename))
                 {
-                    Console.WriteLine("Saving immobile model {0} ... ", dirent.Key);
+                    Console.WriteLine("Processing immobile model {0} ... ", dirent.Key);
 
                     if (!model.HasGeometry)
                     {
@@ -213,9 +235,10 @@ namespace RS5_Extractor
                     }
                     else
                     {
-                        Console.WriteLine("    {0} textures, {1} vertices, {2} triangles", model.Mesh.Textures.Count, model.Mesh.Vertices.Count, model.Mesh.Triangles.Count);
-                        model.SaveUnanimated();
-                        model.SaveMultimesh();
+                        Console.WriteLine("    {0} textures, {1} vertices, {2} triangles", model.Textures.Count(), model.Vertices.Count(), model.Triangles.Count());
+
+                        unanimatedexporter.Save(() => Console.Write("  Saving unanimated ... "), () => Console.WriteLine("Done"));
+                        multimeshexporter.Save(() => Console.Write("  Saving multimesh ... "), () => Console.WriteLine("Done"));
                     }
                 }
             }
@@ -223,10 +246,31 @@ namespace RS5_Extractor
             Console.WriteLine("Processing Animated Models ... ");
             foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in main_rs5.Where(d => d.Value.Type == "AMDL"))
             {
-                AnimatedModel model = new AnimatedModel(dirent.Value);
-                if (!File.Exists(model.ColladaMultimeshFilename))
+                Model model = new Model(dirent.Value);
+                List<Collada.Exporter> exporters = new List<Collada.Exporter>();
+                List<Collada.Exporter<AnimationClip>> animexporters = new List<Collada.Exporter<AnimationClip>>();
+                
+                Collada.Exporter multimeshexporter = model.CreateMultimeshExporter(false);
+                Collada.Exporter unanimatedexporter = model.CreateUnanimatedExporter(false);
+                Collada.Exporter animatedexporter = model.CreateAnimatedExporter("ALL", false);
+
+                exporters.Add(multimeshexporter);
+                exporters.Add(unanimatedexporter);
+                exporters.Add(animatedexporter);
+                
+                if (animclips.ContainsKey(model.Name))
                 {
-                    Console.WriteLine("Saving animated model {0} ... ", dirent.Key);
+                    foreach (AnimationClip clip in animclips[model.Name])
+                    {
+                        Collada.Exporter<AnimationClip> exporter = model.CreateTrimmedAnimatedExporter(clip.Name, clip.StartFrame, clip.NumFrames, clip.FrameRate, false, clip);
+                        exporters.Add(exporter);
+                        animexporters.Add(exporter);
+                    }
+                }
+
+                if (exporters.Select(e => File.Exists(e.Filename)).Any(v => !v))
+                {
+                    Console.WriteLine("Processing animated model {0} ... ", dirent.Key);
 
                     if (!model.HasGeometry)
                     {
@@ -234,39 +278,23 @@ namespace RS5_Extractor
                     }
                     else
                     {
-                        Console.WriteLine("    {0} textures, {1} vertices, {2} triangles, {3} joints, {4} frames", model.Mesh.Textures.Count, model.Mesh.Vertices.Count, model.Mesh.Triangles.Count, model.Joints.Count(), model.NumAnimationFrames);
-                        model.SaveUnanimated();
+                        Console.WriteLine("    {0} textures, {1} vertices, {2} triangles, {3} joints, {4} frames", model.Textures.Count(), model.Vertices.Count(), model.Triangles.Count(), model.Joints.Count(), model.NumAnimationFrames);
 
-                        if (model.HasSkeleton && model.IsAnimated)
+                        unanimatedexporter.Save(() => Console.Write("  Saving unanimated ... "), () => Console.WriteLine("Done"));
+                        multimeshexporter.Save(() => Console.Write("  Saving multimesh ... "), () => Console.WriteLine("Done"));
+                        animatedexporter.Save(() => Console.Write("  Saving all animations ({0} frames @ 24 fps) ... ", model.NumAnimationFrames), () => Console.WriteLine("Done"));
+
+                        if (animclips.ContainsKey(model.Name))
                         {
-                            Console.WriteLine("  Saving all animations ({0} frames @ 24 fps, {1} keyframes) ... ", model.NumAnimationFrames, model.NumAnimationKeyFrames);
-                            model.SaveAnimation("ALL");
-
-                            if (animclips.ContainsKey(model.Name))
+                            foreach (Collada.Exporter<AnimationClip> exporter in animexporters)
                             {
-                                foreach (AnimationClip clip in animclips[model.Name])
-                                {
-                                    Console.Write("  Saving animation {0} ({1} frames @ {2} fps, ", clip.Name, clip.NumFrames, clip.FrameRate);
-                                    Model anim = model.GetAnimatedModel(clip.StartFrame, clip.NumFrames, clip.FrameRate);
-
-                                    if (anim.NumAnimationKeyFrames == 0)
-                                    {
-                                        Console.WriteLine("no keyframes)");
-                                    }
-                                    else
-                                    {
-                                        Console.WriteLine("{0} keyframes)", anim.NumAnimationKeyFrames);
-                                        anim.SaveAnimation(clip.Name);
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                Console.WriteLine("  model clip start and end frames not in environment");
+                                exporter.Save((clip) => Console.Write("  Saving animation {0} ({1} frames @ {2} fps) ... ", clip.Name, clip.NumFrames, clip.FrameRate), (clip) => Console.WriteLine("Done"));
                             }
                         }
-
-                        model.SaveMultimesh();
+                        else
+                        {
+                            Console.WriteLine("  model clip start and end frames not in environment");
+                        }
                     }
                 }
             }
@@ -279,7 +307,7 @@ namespace RS5_Extractor
                 RS5Directory main_rs5 = OpenRS5File("main.rs5");
                 RS5Directory environ_rs5 = OpenRS5File("environment.rs5");
                 Console.Write("Processing environment ... ");
-                RS5Environment environ = new RS5Environment(environ_rs5["environment"].Data.Chunks["DATA"].Data);
+                RS5Environment environ = new RS5Environment(environ_rs5["environment"].GetData().Chunks["DATA"].Data);
                 Dictionary<string, List<AnimationClip>> animclips = ProcessEnvironmentAnimations(environ);
                 Console.WriteLine("Done");
                 XElement environ_xml = environ.ToXML();
@@ -311,10 +339,10 @@ namespace RS5_Extractor
             {
                 Console.WriteLine("Unable to load RS5 files");
             }
-            catch (Exception ex)
+            /* catch (Exception ex)
             {
                 Console.Error.WriteLine("Caught exception: {0}\n\nPlease report this to Ben Peddell <klightspeed@killerwolves.net>", ex.ToString());
-            }
+            } */
             
 
             Console.Error.Write("Press any key to exit");
