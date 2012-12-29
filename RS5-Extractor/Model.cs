@@ -155,7 +155,7 @@ namespace RS5_Extractor
 
             public override ModelBase GetAnimated(int startframe, int numframes, double framerate)
             {
-                return new AnimatedModel(new List<Triangle>(Triangles), RootJoint.WithTrimmedAnimation(startframe, numframes, framerate), ExtraData.ToArray());
+                return new AnimatedModel(new List<Triangle>(Triangles), RootJoint.WithTrimmedAnimation(startframe, numframes, framerate), ExtraData);
             }
 
             #region Joints
@@ -289,7 +289,7 @@ namespace RS5_Extractor
                 RS5Chunk VTXS = chunk.Chunks["VTXS"];
                 RS5Chunk INDS = chunk.Chunks["INDS"];
 
-                IndexedJoint[] joints = rootjoint.GetSelfAndDescendents().OfType<IndexedJoint>().OrderBy(j => j.Index).ToArray();
+                IndexedJoint[] joints = rootjoint == null ? new IndexedJoint[0] : rootjoint.GetSelfAndDescendents().OfType<IndexedJoint>().OrderBy(j => j.Index).ToArray();
 
                 int numtextures = (BLKS == null || BLKS.Data == null) ? 0 : BLKS.Data.Count / 144;
 

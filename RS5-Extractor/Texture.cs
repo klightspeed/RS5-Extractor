@@ -441,6 +441,7 @@ namespace RS5_Extractor
             double minval = Double.PositiveInfinity;
             double maxalpha = Double.NegativeInfinity;
             double minalpha = Double.PositiveInfinity;
+            double alphaoffset = 0.0;
             hasalpha = false;
 
             for (int i = 0; i < width * height * 4; i+=4)
@@ -452,14 +453,23 @@ namespace RS5_Extractor
 
                 for (int j = 0; j < 3; j++)
                 {
-                    if (fdata[i] > maxval)
+                    if (fdata[i + j] > maxval)
                     {
-                        maxval = fdata[i];
+                        maxval = fdata[i + j];
                     }
-                    if (fdata[i] < minval)
+                    if (fdata[i + j] < minval)
                     {
-                        minval = fdata[i];
+                        minval = fdata[i + j];
                     }
+                }
+
+                if (fdata[i + 3] > maxalpha)
+                {
+                    maxalpha = fdata[i + 3];
+                }
+                if (fdata[i + 3] < minalpha)
+                {
+                    minalpha = fdata[i + 3];
                 }
             }
 
@@ -476,6 +486,7 @@ namespace RS5_Extractor
             if (maxalpha == 0)
             {
                 maxalpha = 1.0;
+                //alphaoffset = 1.0;
             }
 
             intensity = maxval;
@@ -485,10 +496,10 @@ namespace RS5_Extractor
 
             for (int i = 0; i < width * height * 4; i += 4)
             {
-                bmpraw[i + 0] = (byte)(fdata[i + 0] * 255 / maxval);
+                bmpraw[i + 0] = (byte)(fdata[i + 2] * 255 / maxval);
                 bmpraw[i + 1] = (byte)(fdata[i + 1] * 255 / maxval);
-                bmpraw[i + 2] = (byte)(fdata[i + 2] * 255 / maxval);
-                bmpraw[i + 3] = (byte)(fdata[i + 3] * 255 / maxalpha);
+                bmpraw[i + 2] = (byte)(fdata[i + 0] * 255 / maxval);
+                bmpraw[i + 3] = (byte)((fdata[i + 3] + alphaoffset) * 255 / maxalpha);
                 hasalpha |= bmpraw[i + 3] != 255;
             }
 
@@ -522,11 +533,11 @@ namespace RS5_Extractor
 
         #region Lazy-init properties
         public DDSImage Image { get { return _Image.Value; } }
-        public int Width { get { return (int)(_Width = _Width ?? Image.Width); } }
-        public int Height { get { return (int)(_Height = _Height ?? Image.Height); } }
-        public bool IsLossless { get { return (bool)(_IsLossless = _IsLossless ?? Image.IsARGB32); } }
-        public bool HasAlpha { get { return (bool)(_HasAlpha = _HasAlpha ?? Image.HasAlpha); } }
-        public bool HasBitmap { get { return (bool)(_HasBitmap = _HasBitmap ?? Image.HasBitmap); } }
+        public int Width       { get { return (int)(_Width       ?? (_Width      = (Image == null ? 0     : Image.Width))); } }
+        public int Height      { get { return (int)(_Height      ?? (_Height     = (Image == null ? 0     : Image.Height))); } }
+        public bool IsLossless { get { return (bool)(_IsLossless ?? (_IsLossless = (Image == null ? false : Image.IsARGB32))); } }
+        public bool HasAlpha   { get { return (bool)(_HasAlpha   ?? (_HasAlpha   = (Image == null ? false : Image.HasAlpha))); } }
+        public bool HasBitmap  { get { return (bool)(_HasBitmap  ?? (_HasBitmap  = (Image == null ? false : Image.HasBitmap))); } }
         #endregion
 
         protected RS5Chunk Chunk;
@@ -534,44 +545,24 @@ namespace RS5_Extractor
         public string Name { get; protected set; }
         public DateTime ModTime { get; protected set; }
 
-        public string PNGFilename
-        {
-            get
-            {
-                return Name + ".png";
-            }
-        }
-
-        public string JPEGFilename
-        {
-            get
-            {
-                return Name + ".jpg";
-            }
-        }
-
-        public string DDSFilename
-        {
-            get
-            {
-                return Name + ".dds";
-            }
-        }
-
-        public string Filename
-        {
-            get
-            {
-                return (HasBitmap ? (HasAlpha ? PNGFilename : JPEGFilename) : DDSFilename);
-            }
-        }
+        public string PNGFilename  { get { return Name + ".png"; } }
+        public string JPEGFilename { get { return Name + ".jpg"; } }
+        public string DDSFilename  { get { return Name + ".dds"; } }
+        public string Filename     { get { return (HasBitmap ? (HasAlpha ? PNGFilename : JPEGFilename) : DDSFilename); } }
 
         #region Lazy-init initializers
         protected DDSImage GetDDS()
         {
-            byte[] data = Chunk.Chunks["DATA"].Data.ToArray();
-            this.Chunk.Flush();
-            return new DDSImage(data);
+            if (Chunk == null)
+            {
+                return null;
+            }
+            else
+            {
+                byte[] data = Chunk.Chunks["DATA"].Data.ToArray();
+                this.Chunk.Flush();
+                return new DDSImage(data);
+            }
         }
 
         #endregion
@@ -603,7 +594,7 @@ namespace RS5_Extractor
 
         public void SaveImage()
         {
-            Bitmap bmp = Image.Bitmap;
+            Bitmap bmp = Image == null ? null : Image.Bitmap;
             string filename = "." + Path.DirectorySeparatorChar + Filename;
 
             switch (Path.GetExtension(filename))
@@ -619,7 +610,7 @@ namespace RS5_Extractor
         {
             foreach (string name in new string[] { DDSFilename, PNGFilename, JPEGFilename })
             {
-                string filename = "." + Path.DirectorySeparatorChar + DDSFilename;
+                string filename = "." + Path.DirectorySeparatorChar + name;
                 if (File.Exists(filename))
                 {
                     return true;

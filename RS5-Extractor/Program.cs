@@ -298,6 +298,8 @@ namespace RS5_Extractor
                     }
                 }
             }
+
+            Console.WriteLine("Export complete");
         }
 
         private static void Main(string[] args)

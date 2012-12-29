@@ -232,9 +232,9 @@ namespace RS5_Extractor
             public IEnumerable<Bone> GetSelfAndDescendents()
             {
                 yield return this;
-                foreach (Skeleton child in ChildBones)
+                foreach (Bone child in ChildBones)
                 {
-                    foreach (Skeleton descendent in child.GetSelfAndDescendents())
+                    foreach (Bone descendent in child.GetSelfAndDescendents())
                     {
                         yield return descendent;
                     }
