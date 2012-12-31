@@ -640,6 +640,8 @@ namespace RS5_Extractor
                     new XAttribute("depth", "1"),
                     new XElement(ns + "init_from", (path + texture.Filename).Replace('\\', '/'))
                 );
+
+                texture.Flush();
             }
         }
 
@@ -808,16 +810,18 @@ namespace RS5_Extractor
             public readonly Func<bool> IsValidFactory;
             public readonly Func<IEnumerable<List<Triangle>>> MeshFactory;
             public readonly Func<Joint> SkeletonFactory;
+            public readonly Func<IEnumerable<XElement>> ExtraDataFactory;
             public readonly DateTime CreateTime;
             public readonly DateTime ModTime;
             public readonly bool overwrite;
 
-            public Exporter(string filename, Func<bool> IsValidFactory, Func<IEnumerable<List<Triangle>>> MeshFactory, Func<Joint> SkeletonFactory, DateTime CreateTime, DateTime ModTime, bool overwrite)
+            public Exporter(string filename, Func<bool> IsValidFactory, Func<IEnumerable<List<Triangle>>> MeshFactory, Func<Joint> SkeletonFactory, Func<IEnumerable<XElement>> ExtraDataFactory, DateTime CreateTime, DateTime ModTime, bool overwrite)
             {
                 this.Filename = filename;
                 this.IsValidFactory = IsValidFactory;
                 this.MeshFactory = MeshFactory;
                 this.SkeletonFactory = SkeletonFactory;
+                this.ExtraDataFactory = ExtraDataFactory;
                 this.CreateTime = CreateTime;
                 this.ModTime = ModTime;
                 this.overwrite = overwrite;
@@ -828,7 +832,7 @@ namespace RS5_Extractor
                 if (IsValidFactory() && (overwrite || !File.Exists(Filename)))
                 {
                     onsave();
-                    Collada.Save(Filename, MeshFactory(), SkeletonFactory(), CreateTime, ModTime);
+                    Collada.Save(Filename, MeshFactory(), SkeletonFactory(), ExtraDataFactory(), CreateTime, ModTime);
                     oncomplete();
                 }
             }
@@ -838,8 +842,8 @@ namespace RS5_Extractor
         {
             public readonly T ObjectState;
 
-            public Exporter(string filename, Func<bool> IsValidFactory, Func<IEnumerable<List<Triangle>>> MeshFactory, Func<Joint> SkeletonFactory, DateTime CreateTime, DateTime ModTime, bool overwrite, T state)
-                : base(filename, IsValidFactory, MeshFactory, SkeletonFactory, CreateTime, ModTime, overwrite)
+            public Exporter(string filename, Func<bool> IsValidFactory, Func<IEnumerable<List<Triangle>>> MeshFactory, Func<Joint> SkeletonFactory, Func<IEnumerable<XElement>> ExtraDataFactory, DateTime CreateTime, DateTime ModTime, bool overwrite, T state)
+                : base(filename, IsValidFactory, MeshFactory, SkeletonFactory, ExtraDataFactory, CreateTime, ModTime, overwrite)
             {
                 this.ObjectState = state;
             }
@@ -849,7 +853,7 @@ namespace RS5_Extractor
                 if (IsValidFactory() && (overwrite || !File.Exists(Filename)))
                 {
                     onsave(ObjectState);
-                    Collada.Save(Filename, MeshFactory(), SkeletonFactory(), CreateTime, ModTime);
+                    Collada.Save(Filename, MeshFactory(), SkeletonFactory(), ExtraDataFactory(), CreateTime, ModTime);
                     oncomplete(ObjectState);
                 }
             }
@@ -911,7 +915,7 @@ namespace RS5_Extractor
             }
         }
 
-        public Collada(IEnumerable<List<Triangle>> meshes, Joint rootjoint, string path, DateTime creattime, DateTime modtime)
+        public Collada(IEnumerable<List<Triangle>> meshes, Joint rootjoint, IEnumerable<XElement> extradata, string path, DateTime creattime, DateTime modtime)
         {
             basepath = path;
             List<Geometry> geometries = new List<Geometry>();
@@ -953,7 +957,15 @@ namespace RS5_Extractor
                     new XElement(ns + "library_images", Materials.Values.Select(m => m.Effect.Image)),
                     new XElement(ns + "library_effects", Materials.Values.Select(m => m.Effect)),
                     new XElement(ns + "library_materials", Materials.Values),
-                    new XElement(ns + "library_geometries", geometries),
+                    new XElement(ns + "library_geometries", 
+                        geometries,
+                        extradata == null ? null : new XElement(ns + "extra",
+                            new XElement(ns + "technique",
+                                new XAttribute("profile", "RS5-Extra"),
+                                extradata
+                            )
+                        )
+                    ),
                     controllers.Count == 0 ? null : new XElement(ns + "library_controllers", controllers),
                     animation == null ? null : new XElement(ns + "library_animations", animation),
                     new XElement(ns + "library_visual_scenes",
@@ -971,7 +983,7 @@ namespace RS5_Extractor
             );
         }
 
-        public static void Save(string filename, IEnumerable<List<Triangle>> meshes, Joint rootjoint, DateTime creattime, DateTime modtime)
+        public static void Save(string filename, IEnumerable<List<Triangle>> meshes, Joint rootjoint, IEnumerable<XElement> extradata, DateTime creattime, DateTime modtime)
         {
             string dir = Path.GetDirectoryName(filename);
             if (!Directory.Exists(dir))
@@ -981,7 +993,7 @@ namespace RS5_Extractor
 
             string path = "." + Path.DirectorySeparatorChar + String.Join(Path.DirectorySeparatorChar.ToString(), Path.GetDirectoryName(filename).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Where(d => d != "." && d != "..").Select(d => ".."));
             
-            XDocument doc = new Collada(meshes, rootjoint, path, creattime, modtime);
+            XDocument doc = new Collada(meshes, rootjoint, extradata, path, creattime, modtime);
             doc.Save(filename);
             File.SetLastWriteTimeUtc(filename, modtime);
         }

@@ -548,7 +548,7 @@ namespace RS5_Extractor
         public string PNGFilename  { get { return Name + ".png"; } }
         public string JPEGFilename { get { return Name + ".jpg"; } }
         public string DDSFilename  { get { return Name + ".dds"; } }
-        public string Filename     { get { return (HasBitmap ? (HasAlpha ? PNGFilename : JPEGFilename) : DDSFilename); } }
+        public string Filename     { get { return GetFilename(); } }
 
         #region Lazy-init initializers
         protected DDSImage GetDDS()
@@ -606,18 +606,23 @@ namespace RS5_Extractor
             }
         }
 
-        public bool TextureFileExists()
+        public string GetFilename()
         {
             foreach (string name in new string[] { DDSFilename, PNGFilename, JPEGFilename })
             {
                 string filename = "." + Path.DirectorySeparatorChar + name;
                 if (File.Exists(filename))
                 {
-                    return true;
+                    return filename;
                 }
             }
 
-            return false;
+            return (HasBitmap ? (HasAlpha ? PNGFilename : JPEGFilename) : DDSFilename);
+        }
+
+        public bool TextureFileExists()
+        {
+            return File.Exists(GetFilename());
         }
 
         public void SaveDDS()

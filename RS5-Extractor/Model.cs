@@ -17,13 +17,13 @@ namespace RS5_Extractor
         {
             public readonly IEnumerable<Triangle> Triangles;
             public readonly Joint RootJoint;
-            public readonly byte[] ExtraData;
+            public readonly IEnumerable<XElement> ExtraData;
 
-            protected ModelBase(IEnumerable<Triangle> Triangles, Joint RootJoint, byte[] ExtraData)
+            protected ModelBase(IEnumerable<Triangle> Triangles, Joint RootJoint, IEnumerable<XElement> ExtraData)
             {
                 this.Triangles = Triangles;
                 this.RootJoint = RootJoint;
-                this.ExtraData = ExtraData;
+                this.ExtraData = ExtraData == null ? null : ExtraData.Select(d => new XElement(d)).ToArray();
             }
 
             public static ModelBase Create(RS5DirectoryEntry dirent)
@@ -49,7 +49,9 @@ namespace RS5_Extractor
 
         protected class ImmobileModel : ModelBase
         {
-            protected ImmobileModel(IEnumerable<Triangle> triangles, Joint rootjoint, byte[] extradata)
+            protected static Matrix4 RootTransform = new Matrix4(-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+
+            protected ImmobileModel(IEnumerable<Triangle> triangles, Joint rootjoint, IEnumerable<XElement> extradata)
                 : base(triangles, rootjoint, extradata)
             {
             }
@@ -58,7 +60,7 @@ namespace RS5_Extractor
             {
                 Joint rootjoint = GetRootJoint(chunk);
                 IEnumerable<Triangle> triangles = GetTriangles(chunk, rootjoint);
-                byte[] extradata = GetExtraData(chunk);
+                IEnumerable<XElement> extradata = GetExtraData(chunk);
                 return new ImmobileModel(triangles, rootjoint, extradata);
             }
 
@@ -72,9 +74,106 @@ namespace RS5_Extractor
                 return null;
             }
 
-            protected static byte[] GetExtraData(RS5Chunk chunk)
+            protected static XElement GetHEADData(ByteSubArray data, string name)
             {
-                return null;
+                int v1 = data.GetInt32(0);
+                float v2 = data.GetSingle(4);
+                float v3 = data.GetSingle(8);
+                float v4 = data.GetSingle(12);
+                float v5 = data.GetSingle(16);
+                float v6 = data.GetSingle(20);
+                float v7 = data.GetSingle(24);
+                float v8 = data.GetSingle(28);
+                float lodhimindist = data.GetSingle(32);
+                float lodhimaxdist = data.GetSingle(36);
+                float lodlomindist = data.GetSingle(40);
+                float lodlomaxdist = data.GetSingle(44);
+                int v13 = data.GetInt32(48);
+
+                return new XElement("IMDL_HEAD",
+                    new XElement("v1", v1),
+                    new XElement("vf", String.Format("{0,12:F6} {1,12:F6} {2,12:F6} {3,12:F6} {4,12:F6} {5,12:F6} {6,12:F6}", v2, v3, v4, v5, v6, v7, v8)),
+                    new XElement("LOD",
+                        new XAttribute("level", "high"),
+                        new XAttribute("mindist", lodhimindist),
+                        new XAttribute("maxdist", lodhimaxdist)
+                    ),
+                    new XElement("LOD",
+                        new XAttribute("level", "low"),
+                        new XAttribute("mindist", lodlomindist),
+                        new XAttribute("maxdist", lodlomaxdist)
+                    ),
+                    new XElement("Flags", v13)
+                );
+            }
+
+            protected static XElement GetTAGLEntry(ByteSubArray data, int index, string name)
+            {
+                int ofs = index * 84;
+                string tagname = data.GetString(ofs + 0, 48);
+                Vector4 attachpos = RootTransform * new Vector4(data.GetSingle(ofs + 48), data.GetSingle(ofs + 52), data.GetSingle(ofs + 56), 1.0);
+                Vector4 fwdvector = RootTransform * new Vector4(data.GetSingle(ofs + 60), data.GetSingle(ofs + 64), data.GetSingle(ofs + 68), 0.0);
+                Vector4 upvector = RootTransform * new Vector4(data.GetSingle(ofs + 72), data.GetSingle(ofs + 76), data.GetSingle(ofs + 80), 0.0);
+
+                return new XElement("IMDL_TAG",
+                    new XAttribute("name", tagname),
+                    new XElement("Position", String.Format("{0,12:F6} {1,12:F6} {2,12:F6}", attachpos.X, attachpos.Y, attachpos.Z)),
+                    new XElement("Forward", String.Format("{0,12:F6} {1,12:F6} {2,12:F6}", fwdvector.X, fwdvector.Y, fwdvector.Z)),
+                    new XElement("Up", String.Format("{0,12:F6} {1,12:F6} {2,12:F6}", upvector.X, upvector.Y, upvector.Z))
+                );
+            }
+            
+            protected static XElement GetTAGLData(ByteSubArray data, string name)
+            {
+                int numtags = data.Count / 84;
+                return new XElement("IMDL_TAGL", Enumerable.Range(0, numtags).Select(i => GetTAGLEntry(data, i, name)));
+            }
+
+            protected static XElement GetBBHData(ByteSubArray data)
+            {
+                return new XElement("IMDL_BBH",
+                    new XAttribute("count", data.Count / 4),
+                    String.Join(" ", Enumerable.Range(0, data.Count / 4).Select(i => data.GetInt32(i * 4)))
+                );
+            }
+
+            protected static XElement GetCOLRData(ByteSubArray data)
+            {
+                return new XElement("IMDL_COLR",
+                    new XAttribute("count", data.Count / 4),
+                    String.Join(" ", Enumerable.Range(0, data.Count / 4).Select(i => data.GetSingle(i * 4)))
+                );
+            }
+
+            protected static IEnumerable<XElement> GetExtraData(RS5Chunk chunk)
+            {
+                RS5Chunk HEAD = chunk.Chunks.ContainsKey("HEAD") ? chunk.Chunks["HEAD"] : null;
+                RS5Chunk TAGL = chunk.Chunks.ContainsKey("TAGL") ? chunk.Chunks["TAGL"] : null;
+                RS5Chunk BBH = chunk.Chunks.ContainsKey("BBH ") ? chunk.Chunks["BBH "] : null;
+                RS5Chunk COLR = chunk.Chunks.ContainsKey("COLR") ? chunk.Chunks["COLR"] : null;
+                List<XElement> elements = new List<XElement>();
+
+                if (HEAD != null && HEAD.Data != null)
+                {
+                    elements.Add(GetHEADData(HEAD.Data, chunk.Name));
+                }
+
+                if (TAGL != null && TAGL.Data != null)
+                {
+                    elements.Add(GetTAGLData(TAGL.Data, chunk.Name));
+                }
+
+                if (BBH != null && BBH.Data != null)
+                {
+                    elements.Add(GetBBHData(BBH.Data));
+                }
+
+                if (COLR != null && COLR.Data != null)
+                {
+                    elements.Add(GetCOLRData(COLR.Data));
+                }
+
+                return elements;
             }
 
             #region Triangles
@@ -127,10 +226,9 @@ namespace RS5_Extractor
                 RS5Chunk VTXL = chunk.Chunks["VTXL"];
                 RS5Chunk TRIL = chunk.Chunks["TRIL"];
 
-                Matrix4 roottransform = new Matrix4(-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
                 int numtextures = (BHDR == null || BHDR.Data == null) ? 0 : BHDR.Data.Count / 144;
 
-                return Enumerable.Range(0, numtextures).SelectMany(i => GetTextureTriangles(roottransform, BHDR, VTXL, TRIL, i)).ToArray();
+                return Enumerable.Range(0, numtextures).SelectMany(i => GetTextureTriangles(RootTransform, BHDR, VTXL, TRIL, i)).ToArray();
             }
 
             #endregion
@@ -140,7 +238,7 @@ namespace RS5_Extractor
         {
             protected static readonly Matrix4 RootTransform = new Matrix4(1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1);
 
-            protected AnimatedModel(IEnumerable<Triangle> triangles, Joint rootjoint, byte[] extradata)
+            protected AnimatedModel(IEnumerable<Triangle> triangles, Joint rootjoint, IEnumerable<XElement> extradata)
                 : base(triangles, rootjoint, extradata)
             {
             }
@@ -149,7 +247,7 @@ namespace RS5_Extractor
             {
                 Joint rootjoint = GetRootJoint(chunk);
                 IEnumerable<Triangle> triangles = GetTriangles(chunk, rootjoint);
-                byte[] extradata = GetExtraData(chunk);
+                IEnumerable<XElement> extradata = GetExtraData(chunk);
                 return new AnimatedModel(triangles, rootjoint, extradata);
             }
 
@@ -298,7 +396,7 @@ namespace RS5_Extractor
 
             #endregion
 
-            protected static byte[] GetExtraData(RS5Chunk chunk)
+            protected static IEnumerable<XElement> GetExtraData(RS5Chunk chunk)
             {
                 return null;
             }
@@ -338,7 +436,7 @@ namespace RS5_Extractor
         protected ModelBase ModelData { get { return _ModelData.Value; } }
         public IEnumerable<Triangle> Triangles { get { return ModelData.Triangles; } }
         public Joint RootJoint { get { return ModelData.RootJoint; } }
-        public byte[] ExtraData { get { return ModelData.ExtraData; } }
+        public IEnumerable<XElement> ExtraData { get { return ModelData.ExtraData; } }
         public IEnumerable<Vertex> Vertices { get { return _Vertices.Value; } }
         public IEnumerable<Texture> Textures { get { return _Textures.Value; } }
         public IEnumerable<Joint> Joints { get { return _Joints.Value; } }
@@ -402,44 +500,44 @@ namespace RS5_Extractor
 
         public Collada.Exporter CreateMultimeshExporter(bool overwrite)
         {
-            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".multimesh.dae", () => HasMultipleTextures, () => GetSubMeshes(), () => null, CreatTime, ModTime, overwrite);
+            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".multimesh.dae", () => HasMultipleTextures, () => GetSubMeshes(), () => null, () => ExtraData, CreatTime, ModTime, overwrite);
         }
 
         public Collada.Exporter<T> CreateMultimeshExporter<T>(bool overwrite, T state)
         {
-            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".multimesh.dae", () => HasMultipleTextures, () => GetSubMeshes(), () => null, CreatTime, ModTime, overwrite, state);
+            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".multimesh.dae", () => HasMultipleTextures, () => GetSubMeshes(), () => null, () => ExtraData, CreatTime, ModTime, overwrite, state);
         }
 
         public Collada.Exporter CreateUnanimatedExporter(bool overwrite)
         {
-            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".noanim..dae", () => true, () => GetFiltered(), () => RootJoint == null ? null : RootJoint.WithoutAnimation(), CreatTime, ModTime, overwrite);
+            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".noanim.dae", () => true, () => GetFiltered(), () => RootJoint == null ? null : RootJoint.WithoutAnimation(), () => ExtraData, CreatTime, ModTime, overwrite);
         }
 
         public Collada.Exporter<T> CreateUnanimatedExporter<T>(bool overwrite, T state)
         {
-            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".noanim..dae", () => true, () => GetFiltered(), () => RootJoint == null ? null : RootJoint.WithoutAnimation(), CreatTime, ModTime, overwrite, state);
+            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".noanim.dae", () => true, () => GetFiltered(), () => RootJoint == null ? null : RootJoint.WithoutAnimation(), () => ExtraData, CreatTime, ModTime, overwrite, state);
         }
 
         public Collada.Exporter CreateAnimatedExporter(string animname, bool overwrite)
         {
-            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => IsAnimated, () => GetFiltered(), () => RootJoint, CreatTime, ModTime, overwrite);
+            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => IsAnimated, () => GetFiltered(), () => RootJoint, () => ExtraData, CreatTime, ModTime, overwrite);
         }
 
         public Collada.Exporter<T> CreateAnimatedExporter<T>(string animname, bool overwrite, T state)
         {
-            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => IsAnimated, () => GetFiltered(), () => RootJoint, CreatTime, ModTime, overwrite, state);
+            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => IsAnimated, () => GetFiltered(), () => RootJoint, () => ExtraData, CreatTime, ModTime, overwrite, state);
         }
 
         public Collada.Exporter CreateTrimmedAnimatedExporter(string animname, int startframe, int numframes, double framerate, bool overwrite)
         {
             Model model = GetAnimatedModel(startframe, numframes, framerate);
-            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => model.IsAnimated, () => model.GetFiltered(), () => model.RootJoint, model.CreatTime, model.ModTime, overwrite);
+            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => model.IsAnimated, () => model.GetFiltered(), () => model.RootJoint, () => ExtraData, model.CreatTime, model.ModTime, overwrite);
         }
 
         public Collada.Exporter<T> CreateTrimmedAnimatedExporter<T>(string animname, int startframe, int numframes, double framerate, bool overwrite, T state)
         {
             Model model = GetAnimatedModel(startframe, numframes, framerate);
-            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => model.IsAnimated, () => model.GetFiltered(), () => model.RootJoint, model.CreatTime, model.ModTime, overwrite, state);
+            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => model.IsAnimated, () => model.GetFiltered(), () => model.RootJoint, () => ExtraData, model.CreatTime, model.ModTime, overwrite, state);
         }
 
         #endregion
