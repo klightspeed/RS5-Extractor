@@ -143,6 +143,20 @@ namespace RS5_Extractor
             return animclips;
         }
 
+        private static string GetMiasmataInstallPath()
+        {
+            string softwarekey = "SOFTWARE";
+            if (Environment.Is64BitProcess)
+            {
+                softwarekey = "SOFTWARE\\Wow6432Node";
+            }
+
+            using (Microsoft.Win32.RegistryKey miasmatakey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(softwarekey + "\\IonFx\\Miasmata"))
+            {
+                return miasmatakey.GetValue("Install_Path").ToString();
+            }
+        }
+
         private static RS5Directory OpenRS5File(string filename)
         {
             string filepath = filename;
@@ -156,21 +170,17 @@ namespace RS5_Extractor
 
                     try
                     {
-                        using (Microsoft.Win32.RegistryKey steamkey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("Software\\Valve\\Steam"))
-                        {
-                            string steampath = steamkey.GetValue("SteamPath").ToString();
-                            string miasmatadir = steampath + Path.DirectorySeparatorChar + "steamapps" + Path.DirectorySeparatorChar + "common" + Path.DirectorySeparatorChar + "Miasmata";
-                            filepath = miasmatadir + Path.DirectorySeparatorChar + filename;
+                        string miasmatadir = GetMiasmataInstallPath();
+                        filepath = miasmatadir + Path.DirectorySeparatorChar + filename;
 
-                            if (!File.Exists(filepath))
-                            {
-                                throw new FileNotFoundException();
-                            }
+                        if (!File.Exists(filepath))
+                        {
+                            throw new FileNotFoundException();
                         }
                     }
                     catch
                     {
-                        Console.WriteLine("Steam doesn't appear to be installed");
+                        Console.WriteLine("Miasmata doesn't appear to be installed");
                         throw new FileNotFoundException();
                     }
                 }
@@ -341,10 +351,10 @@ namespace RS5_Extractor
             {
                 Console.WriteLine("Unable to load RS5 files");
             }
-            /* catch (Exception ex)
+            catch (Exception ex)
             {
                 Console.Error.WriteLine("Caught exception: {0}\n\nPlease report this to Ben Peddell <klightspeed@killerwolves.net>", ex.ToString());
-            } */
+            }
             
 
             Console.Error.Write("Press any key to exit");
