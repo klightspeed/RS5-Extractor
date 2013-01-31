@@ -319,7 +319,9 @@ namespace RS5_Extractor
                 RS5Directory main_rs5 = OpenRS5File("main.rs5");
                 RS5Directory environ_rs5 = OpenRS5File("environment.rs5");
                 Console.Write("Processing environment ... ");
-                RS5Environment environ = new RS5Environment(environ_rs5["environment"].GetData().Chunks["DATA"].Data);
+                ByteSubArray environdata = environ_rs5["environment"].GetData().Chunks["DATA"].Data;
+                File.WriteAllBytes("environment.bin", environdata.ToArray());
+                RS5Environment environ = new RS5Environment(environdata);
                 Dictionary<string, List<AnimationClip>> animclips = ProcessEnvironmentAnimations(environ);
                 Console.WriteLine("Done");
                 XElement environ_xml = environ.ToXML();

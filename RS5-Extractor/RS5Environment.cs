@@ -20,7 +20,11 @@ namespace RS5_Extractor
 
         protected XElement ToXML(object data)
         {
-            if (data is int)
+            if (data == null)
+            {
+                return new XElement("null");
+            }
+            else if (data is int)
             {
                 return new XElement("int", data);
             }
@@ -73,6 +77,24 @@ namespace RS5_Extractor
             }
         }
 
+        protected List<object> ProcessRType(ByteSubArray data)
+        {
+            List<object> vals = new List<object>();
+            int nents = data.ReadInt32();
+            for (int i = 0; i < nents; i++)
+            {
+                byte v = data.ReadByte();
+                if (v != 0)
+                {
+                    throw new InvalidOperationException(String.Format("I don't know what the data at position {0} is.", data.Position - 1));
+                }
+
+                vals.Add(null);
+            }
+
+            return vals;
+        }
+        
         protected List<int> ProcessInt32List(ByteSubArray data)
         {
             List<int> vals = new List<int>();
@@ -133,8 +155,9 @@ namespace RS5_Extractor
                 case 's': return data.ReadString();
                 case 'M': return ProcessList(data, path);
                 case '.': return null;
+                case 'R': return ProcessRType(data);
                 default:
-                    throw new NotImplementedException(String.Format("Unknown type {0} ({0:X8})", (char)type));
+                    throw new NotImplementedException(String.Format("Unknown type {0} ({0:X8}) at position {1}", (char)type, data.Position));
             }
         }
 
