@@ -11,7 +11,7 @@ namespace RS5_Extractor
 {
     class Program
     {
-        private static RS5Directory ProcessRS5File(Stream filestrm)
+        private static void ProcessRS5File(Stream filestrm, Dictionary<string, RS5DirectoryEntry> directory)
         {
             filestrm.Seek(0, SeekOrigin.Begin);
             byte[] fileheader = new byte[24];
@@ -21,7 +21,26 @@ namespace RS5_Extractor
             {
                 long directory_offset = BitConverter.ToInt64(fileheader, 8);
                 int dirent_length = BitConverter.ToInt32(fileheader, 16);
-                return new RS5Directory(filestrm, directory_offset, dirent_length);
+                byte[] dirent_data = new byte[dirent_length];
+                filestrm.Seek(directory_offset, SeekOrigin.Begin);
+                filestrm.Read(dirent_data, 0, dirent_length);
+                long offset = BitConverter.ToInt64(dirent_data, 0);
+                long length = BitConverter.ToInt32(dirent_data, 8);
+                int flags = BitConverter.ToInt32(dirent_data, 12);
+
+                if (offset == directory_offset)
+                {
+                    for (int i = 1; i < (length / dirent_length); i++)
+                    {
+                        filestrm.Seek(directory_offset + i * dirent_length, SeekOrigin.Begin);
+                        filestrm.Read(dirent_data, 0, dirent_length);
+                        if (dirent_data.Take(12).Select(c => c != 0).Aggregate((a, b) => (a || b)))
+                        {
+                            RS5DirectoryEntry dirent = new RS5DirectoryEntry(filestrm, dirent_data);
+                            directory[dirent.Name] = dirent;
+                        }
+                    }
+                }
             }
             else
             {
@@ -157,23 +176,25 @@ namespace RS5_Extractor
             }
         }
 
-        private static RS5Directory OpenRS5File(string filename)
+        private static void OpenRS5Files(Dictionary<string, RS5DirectoryEntry> directory)
         {
-            string filepath = filename;
-            if (!File.Exists(filepath))
-            {
-                string exepath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().CodeBase);
-                filepath = exepath + Path.DirectorySeparatorChar + filename;
+            string path = Environment.CurrentDirectory;
+            string[] rs5files = Directory.EnumerateFiles(path, "*.rs5").ToArray();
 
-                if (!File.Exists(filepath))
+            if (rs5files.Length == 0)
+            {
+                path = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+                rs5files = Directory.EnumerateFiles(path, "*.rs5").ToArray();
+
+                if (rs5files.Length == 0)
                 {
 
                     try
                     {
-                        string miasmatadir = GetMiasmataInstallPath();
-                        filepath = miasmatadir + Path.DirectorySeparatorChar + filename;
+                        path = GetMiasmataInstallPath();
+                        rs5files = Directory.EnumerateFiles(path, "*.rs5").ToArray();
 
-                        if (!File.Exists(filepath))
+                        if (rs5files.Length == 0)
                         {
                             throw new FileNotFoundException();
                         }
@@ -186,18 +207,20 @@ namespace RS5_Extractor
                 }
             }
 
-            Console.WriteLine("Using {0} file from {1}", filename, filepath);
-            Console.Write("Processing {0} central directory ... ", filename);
-            RS5Directory rs5 = ProcessRS5File(File.Open(filepath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite));
-            Console.WriteLine("Done");
-
-            return rs5;
+            foreach (string filename in rs5files.OrderByDescending(v => v))
+            {
+                string filepath = Path.Combine(path, filename);
+                Console.WriteLine("Using {0} file from {1}", filename, filepath);
+                Console.Write("Processing {0} central directory ... ", filename);
+                ProcessRS5File(File.Open(filepath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite), directory);
+                Console.WriteLine("Done");
+            }
         }
         
-        private static void WriteRS5Contents(RS5Directory main_rs5, Dictionary<string, List<AnimationClip>> animclips)
+        private static void WriteRS5Contents(Dictionary<string, RS5DirectoryEntry> directory, Dictionary<string, List<AnimationClip>> animclips)
         {
             Console.WriteLine("Processing Textures ... ");
-            foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in main_rs5.Where(d => d.Value.Type == "IMAG"))
+            foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in directory.Where(d => d.Value.Type == "IMAG"))
             {
                 Texture texture = Texture.AddTexture(dirent.Value);
                 if (!texture.TextureFileExists())
@@ -227,7 +250,7 @@ namespace RS5_Extractor
             }
 
             Console.WriteLine("Processing Immobile Models ... ");
-            foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in main_rs5.Where(d => d.Value.Type == "IMDL"))
+            foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in directory.Where(d => d.Value.Type == "IMDL"))
             {
                 Model model = new Model(dirent.Value);
                 Collada.Exporter multimeshexporter = model.CreateMultimeshExporter(false);
@@ -251,7 +274,7 @@ namespace RS5_Extractor
             }
 
             Console.WriteLine("Processing Animated Models ... ");
-            foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in main_rs5.Where(d => d.Value.Type == "AMDL"))
+            foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in directory.Where(d => d.Value.Type == "AMDL"))
             {
                 Model model = new Model(dirent.Value);
                 List<Collada.Exporter> exporters = new List<Collada.Exporter>();
@@ -313,10 +336,10 @@ namespace RS5_Extractor
         {
             try
             {
-                RS5Directory main_rs5 = OpenRS5File("main.rs5");
-                RS5Directory environ_rs5 = OpenRS5File("environment.rs5");
+                Dictionary<string, RS5DirectoryEntry> directory = new Dictionary<string, RS5DirectoryEntry>();
+                OpenRS5Files(directory);
                 Console.Write("Processing environment ... ");
-                SubStream environdata = environ_rs5["environment"].Data.Chunks["DATA"].Data;
+                SubStream environdata = directory["environment"].Data.Chunks["DATA"].Data;
                 using (Stream environfile = File.Create("environment.bin"))
                 {
                     environdata.CopyTo(environfile);
@@ -329,7 +352,7 @@ namespace RS5_Extractor
                 try
                 {
                     environ_xml.Save("environment.xml");
-                    WriteRS5Contents(main_rs5, animclips);
+                    WriteRS5Contents(directory, animclips);
                 }
                 catch (UnauthorizedAccessException)
                 {
@@ -345,7 +368,7 @@ namespace RS5_Extractor
                     {
                         Environment.CurrentDirectory = exepath;
                         environ_xml.Save("environment.xml");
-                        WriteRS5Contents(main_rs5, animclips);
+                        WriteRS5Contents(directory, animclips);
                     }
                 }
             }
