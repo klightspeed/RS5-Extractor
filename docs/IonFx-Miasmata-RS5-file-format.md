@@ -1,3 +1,5 @@
+# IonFx Miasmata RS5 file format
+
 The RS5 file format is a ZLib-compressed Tagged file format created by Joe Johnson of IonFx for the addictive survival game Miasmata.
 
 Note that fixed-size fields containing variable-size data (such as the name fields in the central directory) will have garbage after the end of the variable-size data.
@@ -60,18 +62,18 @@ align(8) | variable |              | Chunk data or tagged chunks
 Object types are identified by a few tags. Anything that doesn't fit in these tags (such as terrain height maps) is tagged as `RAW.`.
 
 Object types:
-* [`AMDL`](AMDL \(Animated Model\)) Animated Model
-* [`IMDL`](IMDL \(Immobile Model\)) Immobile Model
-* [`IMAG`](IMAG \(Image\)) Image
-* [`IIMP`](IIMP \(Image-based Imposter\)) Image-based Imposter
-* [`MSET`](MSET \(Model Set\)) Model Set
-* [`SAMP`](SAMP \(Sound Sample\)) Sound Sample
-* [`PROF`](PROF \(Shader Profile\)) Shader Profile
-* [`CONF`](CONF \(Shader Configuration\)) Shader Configuration
-* [`INOD`](INOD \(Instance Node\)) Instance Node
-* [`CNOD`](CNOD \(Cartography Node\)) Cartography Node
-* [`FOGN`](FOGN \(Fog Noise Map\)) Fog Noise Map
-* [`RAW.`](RAW. \(Raw Data\)) Raw Data
+* [`AMDL`](AMDL-\(Animated-Model\).md) Animated Model
+* [`IMDL`](IMDL-\(Immobile-Model\).md) Immobile Model
+* [`IMAG`](IMAG-\(Image\).md) Image
+* [`IIMP`](IIMP-\(Image-based-Imposter\).md) Image-based Imposter
+* [`MSET`](MSET-\(Model-Set\).md) Model Set
+* [`SAMP`](SAMP-\(Sound-Sample\).md) Sound Sample
+* [`PROF`](PROF-\(Shader-Profile\).md) Shader Profile
+* [`CONF`](CONF-\(Shader-Configuration\).md) Shader Configuration
+* [`INOD`](INOD-\(Instance-Node\).md) Instance Node
+* [`CNOD`](CNOD-\(Cartography-Node\).md) Cartography Node
+* [`FOGN`](FOGN-\(Fog-Noise-Map\).md) Fog Noise Map
+* [`RAW.`](RAW.-\(Raw-Data\).md) Raw Data
 
 Special objects:
-* [`environment`](Environment settings)
+* [`environment`](Environment-settings.md)

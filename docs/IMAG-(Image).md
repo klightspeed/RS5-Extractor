@@ -1,3 +1,5 @@
+# `IMAG` (Image)
+
 This object represents a texture. It contains a `HEAD` chunk containing metadata, and a `DATA` chunk containing the DDS texture.
 
 ## `HEAD`

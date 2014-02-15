@@ -1,3 +1,5 @@
+# `MSET` (Model Set)
+
 These objects contain the Level of Detail model sets. Each object contains a `DATA` chunk containing the list of models and presumably LOD distances.
 
 ## `DATA`

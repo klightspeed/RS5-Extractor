@@ -1,3 +1,5 @@
+# `INOD` (Instance Node)
+
 These objects appear to contain position and rotation data. Each contains one 4 byte integer with the number of entries, followed by that number of 40 byte entries.
 
 Offset   | Size     | Type         | Meaning

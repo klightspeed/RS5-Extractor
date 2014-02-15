@@ -1,3 +1,5 @@
+# `AMDL` (Animated Model)
+
 These objects represent Animated Models. Each model contains a `BLKS` Texture list, a `VTXS` Vertex list and a `INDS` Triangle list. Each model can also contain a `FRMS` list and a `JNTS` Joint list.
 
 ## `FRMS`

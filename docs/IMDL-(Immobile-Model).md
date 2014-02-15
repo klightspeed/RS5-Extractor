@@ -1,3 +1,5 @@
+# `IMDL` (Immobile Model)
+
 These objects represent Immobile Models. Each model contains a Texture list `BHDR`, a Vertex list `VTXL` and a Triangle list `TRIL`. Each model also contains a `HEAD` structure, a Tag list `TAGL`, a `BBH ` list, and a `COLR` list. The name of the model typically has a `.h` extension for high LOD, `.m` extension for medium LOD, `.l` extension for a low LOD, or a `.x` extension for an extra-low LOD.
 
 ## `HEAD`

@@ -1,3 +1,5 @@
+# `CNOD` (Cartography Node)
+
 These objects appear to contain terrain data at various levels of detail.
 
 The names of these objects are of the form `cterrllxxxxyyyy` where 

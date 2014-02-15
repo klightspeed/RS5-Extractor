@@ -1,3 +1,5 @@
+# Environment settings
+
 This file is encoded in a binary serialized format.  Each value begins with a type byte.  Following the type byte is the variable data.
 
 The following types are known:
