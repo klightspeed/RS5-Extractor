@@ -640,8 +640,6 @@ namespace RS5_Extractor
                     new XAttribute("depth", "1"),
                     new XElement(ns + "init_from", (path + texture.Filename).Replace('\\', '/'))
                 );
-
-                texture.Flush();
             }
         }
 

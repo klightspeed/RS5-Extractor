@@ -199,8 +199,7 @@ namespace RS5_Extractor
             Console.WriteLine("Processing Textures ... ");
             foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in main_rs5.Where(d => d.Value.Type == "IMAG"))
             {
-                Texture.AddTexture(dirent.Value);
-                Texture texture = Texture.GetTexture(dirent.Key);
+                Texture texture = Texture.AddTexture(dirent.Value);
                 if (!texture.TextureFileExists())
                 {
                     Console.Write("Saving texture {0}", dirent.Key);
@@ -224,8 +223,6 @@ namespace RS5_Extractor
                         Console.WriteLine(".dds  ({0} x {1})  {2}kiB", texture.Width, texture.Height, (new FileInfo(texture.DDSFilename).Length + 1023) / 1024);
                         Console.WriteLine("  Reason: DDS couldn't be faithfully converted", texture.Image.FourCC);
                     }
-
-                    texture.Flush();
                 }
             }
 
@@ -319,8 +316,11 @@ namespace RS5_Extractor
                 RS5Directory main_rs5 = OpenRS5File("main.rs5");
                 RS5Directory environ_rs5 = OpenRS5File("environment.rs5");
                 Console.Write("Processing environment ... ");
-                ByteSubArray environdata = environ_rs5["environment"].GetData().Chunks["DATA"].Data;
-                File.WriteAllBytes("environment.bin", environdata.ToArray());
+                SubStream environdata = environ_rs5["environment"].Data.Chunks["DATA"].Data;
+                using (Stream environfile = File.Create("environment.bin"))
+                {
+                    environdata.CopyTo(environfile);
+                }
                 RS5Environment environ = new RS5Environment(environdata);
                 Dictionary<string, List<AnimationClip>> animclips = ProcessEnvironmentAnimations(environ);
                 Console.WriteLine("Done");

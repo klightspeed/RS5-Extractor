@@ -28,7 +28,7 @@ namespace RS5_Extractor
 
             public static ModelBase Create(RS5DirectoryEntry dirent)
             {
-                RS5Chunk chunk = dirent.GetData();
+                RS5Chunk chunk = dirent.Data;
 
                 if (dirent.Type == "IMDL")
                 {
@@ -74,7 +74,7 @@ namespace RS5_Extractor
                 return null;
             }
 
-            protected static XElement GetHEADData(ByteSubArray data, string name)
+            protected static XElement GetHEADData(SubStream data, string name)
             {
                 int v1 = data.GetInt32(0);
                 float v2 = data.GetSingle(4);
@@ -107,7 +107,7 @@ namespace RS5_Extractor
                 );
             }
 
-            protected static XElement GetTAGLEntry(ByteSubArray data, int index, string name)
+            protected static XElement GetTAGLEntry(SubStream data, int index, string name)
             {
                 int ofs = index * 84;
                 string tagname = data.GetString(ofs + 0, 48);
@@ -123,25 +123,25 @@ namespace RS5_Extractor
                 );
             }
             
-            protected static XElement GetTAGLData(ByteSubArray data, string name)
+            protected static XElement GetTAGLData(SubStream data, string name)
             {
-                int numtags = data.Count / 84;
+                int numtags = (int)(data.Length / 84);
                 return new XElement("IMDL_TAGL", Enumerable.Range(0, numtags).Select(i => GetTAGLEntry(data, i, name)));
             }
 
-            protected static XElement GetBBHData(ByteSubArray data)
+            protected static XElement GetBBHData(SubStream data)
             {
                 return new XElement("IMDL_BBH",
-                    new XAttribute("count", data.Count / 4),
-                    String.Join(" ", Enumerable.Range(0, data.Count / 4).Select(i => data.GetInt32(i * 4)))
+                    new XAttribute("count", data.Length / 4),
+                    String.Join(" ", Enumerable.Range(0, (int)(data.Length / 4)).Select(i => data.GetInt32(i * 4)))
                 );
             }
 
-            protected static XElement GetCOLRData(ByteSubArray data)
+            protected static XElement GetCOLRData(SubStream data)
             {
                 return new XElement("IMDL_COLR",
-                    new XAttribute("count", data.Count / 4),
-                    String.Join(" ", Enumerable.Range(0, data.Count / 4).Select(i => data.GetSingle(i * 4)))
+                    new XAttribute("count", data.Length / 4),
+                    String.Join(" ", Enumerable.Range(0, (int)(data.Length / 4)).Select(i => data.GetSingle(i * 4)))
                 );
             }
 
@@ -183,9 +183,9 @@ namespace RS5_Extractor
                 int vtxofs = index * 36;
                 return new Vertex(
                     transform * new Vector4(VTXL.Data.GetSingle(vtxofs + 0), VTXL.Data.GetSingle(vtxofs + 4), VTXL.Data.GetSingle(vtxofs + 8), 1.0),
-                    transform * new Vector4((VTXL.Data[vtxofs + 14] - 0x80) / 127.0, (VTXL.Data[vtxofs + 13] - 0x80) / 127.0, (VTXL.Data[vtxofs + 12] - 0x80) / 127.0, 0.0),
-                    transform * new Vector4((VTXL.Data[vtxofs + 18] - 0x80) / 127.0, (VTXL.Data[vtxofs + 17] - 0x80) / 127.0, (VTXL.Data[vtxofs + 16] - 0x80) / 127.0, 0.0),
-                    transform * new Vector4((VTXL.Data[vtxofs + 22] - 0x80) / 127.0, (VTXL.Data[vtxofs + 21] - 0x80) / 127.0, (VTXL.Data[vtxofs + 20] - 0x80) / 127.0, 0.0),
+                    transform * new Vector4((VTXL.Data.GetByte(vtxofs + 14) - 0x80) / 127.0, (VTXL.Data.GetByte(vtxofs + 13) - 0x80) / 127.0, (VTXL.Data.GetByte(vtxofs + 12) - 0x80) / 127.0, 0.0),
+                    transform * new Vector4((VTXL.Data.GetByte(vtxofs + 18) - 0x80) / 127.0, (VTXL.Data.GetByte(vtxofs + 17) - 0x80) / 127.0, (VTXL.Data.GetByte(vtxofs + 16) - 0x80) / 127.0, 0.0),
+                    transform * new Vector4((VTXL.Data.GetByte(vtxofs + 22) - 0x80) / 127.0, (VTXL.Data.GetByte(vtxofs + 21) - 0x80) / 127.0, (VTXL.Data.GetByte(vtxofs + 20) - 0x80) / 127.0, 0.0),
                     new TextureCoordinate(texture, VTXL.Data.GetSingle(vtxofs + 24), -VTXL.Data.GetSingle(vtxofs + 28)),
                     null,
                     VTXL.Data.GetBytes(vtxofs + 32, 4)
@@ -226,7 +226,7 @@ namespace RS5_Extractor
                 RS5Chunk VTXL = chunk.Chunks["VTXL"];
                 RS5Chunk TRIL = chunk.Chunks["TRIL"];
 
-                int numtextures = (BHDR == null || BHDR.Data == null) ? 0 : BHDR.Data.Count / 144;
+                int numtextures = (BHDR == null || BHDR.Data == null) ? 0 : (int)(BHDR.Data.Length / 144);
 
                 return Enumerable.Range(0, numtextures).SelectMany(i => GetTextureTriangles(RootTransform, BHDR, VTXL, TRIL, i)).ToArray();
             }
@@ -315,8 +315,8 @@ namespace RS5_Extractor
 
                 if (JNTS != null)
                 {
-                    int numjoints = JNTS.Data.Count / 196;
-                    int numframes = (FRMS != null && FRMS.Data != null) ? FRMS.Data.Count / (numjoints * 64) : 0;
+                    int numjoints = (int)(JNTS.Data.Length / 196);
+                    int numframes = (FRMS != null && FRMS.Data != null) ? (int)(FRMS.Data.Length / (numjoints * 64)) : 0;
 
                     JointData[] jointdata = Enumerable.Range(0, numjoints).Select(i => new JointData(JNTS, FRMS, numjoints, numframes, i)).ToArray();
 
@@ -342,11 +342,11 @@ namespace RS5_Extractor
                 int vtxofs = index * 32;
                 return new Vertex(
                     transform * new Vector4(VTXS.Data.GetSingle(vtxofs + 0), VTXS.Data.GetSingle(vtxofs + 4), VTXS.Data.GetSingle(vtxofs + 8), 1.0),
-                    transform * new Vector4((VTXS.Data[vtxofs + 22] - 0x80) / 127.0, (VTXS.Data[vtxofs + 21] - 0x80) / 127.0, (VTXS.Data[vtxofs + 20] - 0x80) / 127.0, 0.0),
+                    transform * new Vector4((VTXS.Data.GetByte(vtxofs + 22) - 0x80) / 127.0, (VTXS.Data.GetByte(vtxofs + 21) - 0x80) / 127.0, (VTXS.Data.GetByte(vtxofs + 20) - 0x80) / 127.0, 0.0),
                     Vector4.Zero,
                     Vector4.Zero,
                     new TextureCoordinate(texture, VTXS.Data.GetSingle(vtxofs + 12), -VTXS.Data.GetSingle(vtxofs + 16)),
-                    Enumerable.Range(0, 4).Select(i => GetJointInfluence(VTXS.Data[vtxofs + 24 + i], VTXS.Data[vtxofs + 28 + i], joints)).Where(j => j != null),
+                    Enumerable.Range(0, 4).Select(i => GetJointInfluence(VTXS.Data.GetByte(vtxofs + 24 + i), VTXS.Data.GetByte(vtxofs + 28 + i), joints)).Where(j => j != null),
                     null
                 );
             }
@@ -389,7 +389,7 @@ namespace RS5_Extractor
 
                 IndexedJoint[] joints = rootjoint == null ? new IndexedJoint[0] : rootjoint.GetSelfAndDescendents().OfType<IndexedJoint>().OrderBy(j => j.Index).ToArray();
 
-                int numtextures = (BLKS == null || BLKS.Data == null) ? 0 : BLKS.Data.Count / 144;
+                int numtextures = (BLKS == null || BLKS.Data == null) ? 0 : (int)(BLKS.Data.Length / 144);
 
                 return Enumerable.Range(0, numtextures).SelectMany(i => GetTextureTriangles(RootTransform, BLKS, VTXS, INDS, i, joints)).ToArray();
             }
@@ -412,6 +412,7 @@ namespace RS5_Extractor
 
         #region Lazy-init property backing
 
+        private Func<ModelBase> _ModelDataInitializer;
         private Lazy<ModelBase> _ModelData;
         private Lazy<Vertex[]> _Vertices;
         private Lazy<Texture[]> _Textures;
@@ -455,10 +456,11 @@ namespace RS5_Extractor
         
         #endregion
 
-        #region Constructors
+        #region Lazy initialization
 
-        private Model()
+        private void InitLazyProps()
         {
+            this._ModelData = new Lazy<ModelBase>(() => _ModelDataInitializer());
             this._Vertices = new Lazy<Vertex[]>(() => Triangles.SelectMany(t => t).Union(new Vertex[0]).ToArray());
             this._Textures = new Lazy<Texture[]>(() => Triangles.Select(t => t.Texture).Union(new Texture[0]).ToArray());
             this._Joints = new Lazy<Joint[]>(() => RootJoint == null ? new Joint[0] : RootJoint.GetSelfAndDescendents().ToArray());
@@ -476,13 +478,23 @@ namespace RS5_Extractor
             this._NumAnimationKeyFrames = new Lazy<int>(() => Animations.Select(anim => anim.Frames.Select(f => f.FrameNum)).Aggregate((a, v) => a.Union(v)).Count());
         }
 
+        #endregion
+
+        #region Constructors
+
+        private Model()
+        {
+            InitLazyProps();
+            _ModelDataInitializer = () => null;
+        }
+
         public Model(RS5DirectoryEntry dirent)
             : this()
         {
             this.Name = dirent.Name;
             this.ModTime = dirent.ModTime;
             this.CreatTime = dirent.ModTime;
-            this._ModelData = new Lazy<ModelBase>(() => ModelBase.Create(dirent));
+            this._ModelDataInitializer = () => ModelBase.Create(dirent);
         }
 
         protected Model(Model model, Func<ModelBase> modeldata)
@@ -491,7 +503,7 @@ namespace RS5_Extractor
             this.Name = model.Name;
             this.CreatTime = model.CreatTime;
             this.ModTime = model.ModTime;
-            this._ModelData = new Lazy<ModelBase>(modeldata);
+            this._ModelDataInitializer = modeldata;
         }
         
         #endregion

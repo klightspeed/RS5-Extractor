@@ -57,7 +57,7 @@ namespace RS5_Extractor
             }
         }
 
-        protected Dictionary<string, dynamic> ProcessKeyValuePairs(ByteSubArray data, List<string> path)
+        protected Dictionary<string, dynamic> ProcessKeyValuePairs(SubStream data, List<string> path)
         {
             Dictionary<string, object> ret = new Dictionary<string, object>(StringComparer.InvariantCultureIgnoreCase);
 
@@ -77,13 +77,13 @@ namespace RS5_Extractor
             }
         }
 
-        protected List<object> ProcessRType(ByteSubArray data)
+        protected List<object> ProcessRType(SubStream data)
         {
             List<object> vals = new List<object>();
             int nents = data.ReadInt32();
             for (int i = 0; i < nents; i++)
             {
-                byte v = data.ReadByte();
+                int v = data.ReadByte();
                 if (v != 0)
                 {
                     throw new InvalidOperationException(String.Format("I don't know what the data at position {0} is.", data.Position - 1));
@@ -95,7 +95,7 @@ namespace RS5_Extractor
             return vals;
         }
         
-        protected List<int> ProcessInt32List(ByteSubArray data)
+        protected List<int> ProcessInt32List(SubStream data)
         {
             List<int> vals = new List<int>();
             int nents = data.ReadInt32();
@@ -106,7 +106,7 @@ namespace RS5_Extractor
             return vals;
         }
 
-        protected List<float> ProcessSingleList(ByteSubArray data)
+        protected List<float> ProcessSingleList(SubStream data)
         {
             List<float> vals = new List<float>();
             int nents = data.ReadInt32();
@@ -117,7 +117,7 @@ namespace RS5_Extractor
             return vals;
         }
 
-        protected List<string> ProcessStringList(ByteSubArray data)
+        protected List<string> ProcessStringList(SubStream data)
         {
             List<string> vals = new List<string>();
             int nents = data.ReadInt32();
@@ -128,7 +128,7 @@ namespace RS5_Extractor
             return vals;
         }
 
-        protected List<dynamic> ProcessList(ByteSubArray data, List<string> path)
+        protected List<dynamic> ProcessList(SubStream data, List<string> path)
         {
             List<object> vals = new List<object>();
             int nents = data.ReadInt32();
@@ -141,9 +141,9 @@ namespace RS5_Extractor
             return vals;
         }
 
-        protected dynamic ProcessValue(ByteSubArray data, List<string> path)
+        protected dynamic ProcessValue(SubStream data, List<string> path)
         {
-            byte type = data.ReadByte();
+            int type = data.ReadByte();
             switch ((char)type)
             {
                 case 'T': return ProcessKeyValuePairs(data, path);
@@ -161,7 +161,7 @@ namespace RS5_Extractor
             }
         }
 
-        public RS5Environment(ByteSubArray data)
+        public RS5Environment(SubStream data)
         {
             data.Position = 0;
             Data = ProcessValue(data, new List<string>());
