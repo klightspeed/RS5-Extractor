@@ -11,6 +11,24 @@ namespace RS5_Extractor
 {
     class Program
     {
+        private static Dictionary<string, string> TypeExtensions = new Dictionary<string, string>
+        {
+            {"IMDL", "imdl"},
+            {"AMDL", "amdl"},
+            {"IMAG", "imag"},
+            {"IIMP", "iimp"},
+            {"MSET", "mset"},
+            {"SAMP", "samp"},
+            {"PROF", "prof"},
+            {"CONF", "conf"},
+            {"INOD", "inod"},
+            {"CNOD", "cnod"},
+            {"FOGN", "fogn"},
+            {"RAW.", "raw"}
+        };
+
+        private static string DefaultExtension = "bin";
+
         private static void ProcessRS5File(Stream filestrm, Dictionary<string, RS5DirectoryEntry> directory)
         {
             filestrm.Seek(0, SeekOrigin.Begin);
@@ -219,6 +237,31 @@ namespace RS5_Extractor
         
         private static void WriteRS5Contents(Dictionary<string, RS5DirectoryEntry> directory, Dictionary<string, List<AnimationClip>> animclips)
         {
+            Console.WriteLine("Writing raw files ... ");
+            foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in directory)
+            {
+                string filename = dirent.Value.Name + "." + (TypeExtensions.ContainsKey(dirent.Value.Type) ? TypeExtensions[dirent.Value.Type] : DefaultExtension);
+                if (!File.Exists(filename))
+                {
+                    RS5Chunk data = dirent.Value.Data;
+                    Console.Write("{0}   {1}   ", dirent.Value.Type, dirent.Value.Name);
+                    string dir = Path.GetDirectoryName(filename);
+
+                    if (dir != "" && !Directory.Exists(dir))
+                    {
+                        Directory.CreateDirectory(dir);
+                    }
+
+                    using (Stream outfile = File.Create(filename))
+                    {
+                        data.ChunkData.CopyTo(outfile);
+                    }
+
+                    File.SetLastWriteTime(filename, dirent.Value.ModTime);
+                    Console.WriteLine("{0}kiB", (data.ChunkData.Length + 1023) / 1024);
+                }
+            }
+
             Console.WriteLine("Processing Textures ... ");
             foreach (KeyValuePair<string, RS5DirectoryEntry> dirent in directory.Where(d => d.Value.Type == "IMAG"))
             {
