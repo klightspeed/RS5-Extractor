@@ -2,6 +2,8 @@
 
 This file is encoded in a binary serialized format.  Each value begins with a type byte.  Following the type byte is the variable data.
 
+The saves.dat file that stores the game's configuration and save slots also uses this format.
+
 The following types are known:
 * `T` (0x54): Dictionary - pairs of null-terminated string keys and typed values.  Closed when a zero-length key is encountered.
 * `I` (0x49): Integer array - 32-bit integer count followed by count 32-bit integer values.
@@ -11,5 +13,5 @@ The following types are known:
 * `S` (0x53): String array - 32-bit integer count followed by count null-terminated strings.
 * `s` (0x73): String - null-terminated string.
 * `M` (0x4D): Typed array - 32-bit integer count followed by count typed values.
-* `R` (0x52): _Reference(?)_ array - 32-bit integer count followed by count _null-terminated reference strings(?)_
+* `R` (0x52): Raw binary data - 32-bit integer count followed by count bytes.
 * `.` (0x2E): Null
