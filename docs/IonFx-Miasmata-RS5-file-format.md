@@ -39,7 +39,7 @@ Offset   | Size     | Type         | Meaning
 0x000C   | 4        | ???          | Unknown - seems to always be `0x80000000` for present entries
 0x0010   | 4        | ???          | Unknown - seems to always be `0x00000300` for present entries
 0x0014   | 4        | `byte[]`     | FourCC - identifies type of object
-0x0018   | 8        | ???          | Unknown - appears to be about twice the size of the uncompressed data
+0x0018   | 8        | long         | The size of the uncompressed data shifted left by one bit. The low bit is always 1 for a valid entry and 0 otherwise.
 0x0020   | 8        | `FILETIME`   | Appears to be the modification time of the object
 0x0028   | 128      | `ASCIZ`      | Null-terminated name of object
 
