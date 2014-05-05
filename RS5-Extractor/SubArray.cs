@@ -283,6 +283,16 @@ namespace RS5_Extractor
         public void   SetSingle(long offset, float  data) { SetBytes(offset, 4, BitConverter.GetBytes(data)); }
         public void   SetDouble(long offset, double data) { SetBytes(offset, 8, BitConverter.GetBytes(data)); }
 
+        public void WriteSByte(sbyte data) { WriteByte((byte)data); }
+        public void WriteInt16(short data) { WriteBytes(2, BitConverter.GetBytes(data)); }
+        public void WriteUInt16(ushort data) { WriteBytes(2, BitConverter.GetBytes(data)); }
+        public void WriteInt32(int data) { WriteBytes(4, BitConverter.GetBytes(data)); }
+        public void WriteUInt32(uint data) { WriteBytes(4, BitConverter.GetBytes(data)); }
+        public void WriteInt64(long data) { WriteBytes(8, BitConverter.GetBytes(data)); }
+        public void WriteUInt64(ulong data) { WriteBytes(8, BitConverter.GetBytes(data)); }
+        public void WriteSingle(float data) { WriteBytes(4, BitConverter.GetBytes(data)); }
+        public void WriteDouble(double data) { WriteBytes(8, BitConverter.GetBytes(data)); }
+
         public Matrix4 GetMatrix4(long offset)
         {
             return new Matrix4(
@@ -310,6 +320,23 @@ namespace RS5_Extractor
             return sb.ToString();
         }
 
+        protected void WriteString(string data, int length)
+        {
+            for (int i = 0; i < length - 1; i++)
+            {
+                if (i >= data.Length)
+                {
+                    WriteByte(0);
+                }
+                else
+                {
+                    WriteByte((byte)(data[i] > 255 ? 255 : data[i]));
+                }
+            }
+
+            WriteByte(0);
+        }
+
         protected string GetString(long offset, int length, out long endoffset)
         {
             Seek(offset, SeekOrigin.Begin);
@@ -334,6 +361,16 @@ namespace RS5_Extractor
         {
             int remain;
             return ReadString(Int32.MaxValue, out remain);
+        }
+
+        public void WriteString(string data)
+        {
+            for (int i = 0; i < data.Length; i++)
+            {
+                WriteByte((byte)(data[i] > 255 ? 255 : data[i]));
+            }
+
+            WriteByte(0);
         }
     }
 

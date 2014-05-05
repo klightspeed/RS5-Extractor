@@ -6,6 +6,7 @@ using System.Text;
 using System.Dynamic;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using System.IO;
 
 namespace RS5_Extractor
 {
@@ -35,6 +36,10 @@ namespace RS5_Extractor
             else if (data is string)
             {
                 return new XElement("string", data);
+            }
+            else if (data is byte[])
+            {
+                return new XElement("binary", Convert.ToBase64String((byte[])data));
             }
             else if (data is IDictionary<string, object>)
             {
@@ -77,22 +82,29 @@ namespace RS5_Extractor
             }
         }
 
-        protected List<object> ProcessRType(SubStream data)
+        protected void WriteKeyValuePairs(SubStream outstream, IDictionary data)
+        {
+            foreach (DictionaryEntry de in data)
+            {
+                outstream.WriteString(de.Key.ToString());
+                WriteValue(outstream, de.Value);
+            }
+
+            outstream.WriteByte(0);
+        }
+
+        protected byte[] ProcessRawBinary(SubStream data)
         {
             List<object> vals = new List<object>();
             int nents = data.ReadInt32();
-            for (int i = 0; i < nents; i++)
-            {
-                int v = data.ReadByte();
-                if (v != 0)
-                {
-                    throw new InvalidOperationException(String.Format("I don't know what the data at position {0} is.", data.Position - 1));
-                }
+            byte[] rawdata = data.ReadBytes(nents);
+            return rawdata;
+        }
 
-                vals.Add(null);
-            }
-
-            return vals;
+        protected void WriteRawBinary(SubStream outstream, byte[] data)
+        {
+            outstream.WriteInt32(data.Length);
+            outstream.WriteBytes(data.Length, data);
         }
         
         protected List<int> ProcessInt32List(SubStream data)
@@ -106,6 +118,15 @@ namespace RS5_Extractor
             return vals;
         }
 
+        protected void WriteInt32List(SubStream outstream, List<int> data)
+        {
+            outstream.WriteInt32(data.Count);
+            foreach (int val in data)
+            {
+                outstream.WriteInt32(val);
+            }
+        }
+
         protected List<float> ProcessSingleList(SubStream data)
         {
             List<float> vals = new List<float>();
@@ -115,6 +136,15 @@ namespace RS5_Extractor
                 vals.Add(data.ReadSingle());
             }
             return vals;
+        }
+
+        protected void WriteSingleList(SubStream outstream, List<float> data)
+        {
+            outstream.WriteInt32(data.Count);
+            foreach (float val in data)
+            {
+                outstream.WriteSingle(val);
+            }
         }
 
         protected List<string> ProcessStringList(SubStream data)
@@ -128,6 +158,15 @@ namespace RS5_Extractor
             return vals;
         }
 
+        protected void WriteStringList(SubStream outstream, List<string> data)
+        {
+            outstream.WriteInt32(data.Count);
+            foreach (string val in data)
+            {
+                outstream.WriteString(val);
+            }
+        }
+
         protected List<dynamic> ProcessList(SubStream data, List<string> path)
         {
             List<object> vals = new List<object>();
@@ -139,6 +178,15 @@ namespace RS5_Extractor
                 vals.Add(ProcessValue(data, _path));
             }
             return vals;
+        }
+
+        protected void WriteList(SubStream outstream, IList data)
+        {
+            outstream.WriteInt32(data.Count);
+            foreach (object val in data)
+            {
+                WriteValue(outstream, val);
+            }
         }
 
         protected dynamic ProcessValue(SubStream data, List<string> path)
@@ -155,9 +203,65 @@ namespace RS5_Extractor
                 case 's': return data.ReadString();
                 case 'M': return ProcessList(data, path);
                 case '.': return null;
-                case 'R': return ProcessRType(data);
+                case 'R': return ProcessRawBinary(data);
                 default:
                     throw new NotImplementedException(String.Format("Unknown type {0} ({0:X8}) at position {1}", (char)type, data.Position));
+            }
+        }
+
+        protected void WriteValue(SubStream outstream, object data)
+        {
+            if (data == null)
+            {
+                outstream.WriteByte((byte)'.');
+            }
+            else if (data is string)
+            {
+                outstream.WriteByte((byte)'s');
+                outstream.WriteString((string)data);
+            }
+            else if (data is float)
+            {
+                outstream.WriteByte((byte)'f');
+                outstream.WriteSingle((float)data);
+            }
+            else if (data is int)
+            {
+                outstream.WriteByte((byte)'i');
+                outstream.WriteInt32((int)data);
+            }
+            else if (data is byte[])
+            {
+                outstream.WriteByte((byte)'R');
+                WriteRawBinary(outstream, (byte[])data);
+            }
+            else if (data is List<string>)
+            {
+                outstream.WriteByte((byte)'S');
+                WriteStringList(outstream, (List<string>)data);
+            }
+            else if (data is List<float>)
+            {
+                outstream.WriteByte((byte)'F');
+                WriteSingleList(outstream, (List<float>)data);
+            }
+            else if (data is List<int>)
+            {
+                outstream.WriteByte((byte)'I');
+                WriteInt32List(outstream, (List<int>)data);
+            }
+            else if (data is IList)
+            {
+                outstream.WriteByte((byte)'M');
+                WriteList(outstream, (IList)data);
+            }
+            else if (data is IDictionary)
+            {
+                outstream.WriteByte((byte)'T');
+            }
+            else
+            {
+                throw new InvalidOperationException(String.Format("Unable to write value of type {0}", data.GetType().ToString()));
             }
         }
 
@@ -165,6 +269,21 @@ namespace RS5_Extractor
         {
             data.Position = 0;
             Data = ProcessValue(data, new List<string>());
+        }
+
+        public void WriteTo(SubStream stream)
+        {
+            WriteValue(stream, this.Data);
+        }
+
+        public void WriteTo(Stream stream)
+        {
+            using (SubStream tmpstream = new SubStream(new MemoryStream()))
+            {
+                WriteTo(tmpstream);
+                tmpstream.Seek(0, SeekOrigin.Begin);
+                tmpstream.CopyTo(stream);
+            }
         }
     }
 }
