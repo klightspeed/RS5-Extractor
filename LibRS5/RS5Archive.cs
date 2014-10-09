@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -7,12 +8,12 @@ using Ionic.Zlib;
 
 namespace LibRS5
 {
-    public class RS5Archive
+    public class RS5Archive : IEnumerable<RS5DirectoryEntry>
     {
         private Stream ArchiveStream { get; set; }
-        public Dictionary<string, RS5DirectoryEntry> CentralDirectory { get; set; }
+        private RS5DirectoryEntry[] CentralDirectoryEntries { get; set; }
+        private Dictionary<string, int> CentralDirectoryLookup { get; set; }
 
-        private RS5DirectoryEntry CentralDirectoryNode { get; set; }
         private int DirectoryEntryLength { get; set; }
 
         public static RS5Archive Open(Stream filestrm)
@@ -84,7 +85,6 @@ namespace LibRS5
         protected void OpenExisting(Stream filestrm)
         {
             this.ArchiveStream = filestrm;
-            this.CentralDirectory = new Dictionary<string, RS5DirectoryEntry>();
             this.ArchiveStream.Seek(0, SeekOrigin.Begin);
             byte[] fileheader = new byte[24];
             this.ArchiveStream.Read(fileheader, 0, 24);
@@ -96,17 +96,21 @@ namespace LibRS5
                 byte[] direntdata = new byte[this.DirectoryEntryLength];
                 this.ArchiveStream.Seek(offset, SeekOrigin.Begin);
                 this.ArchiveStream.Read(direntdata, 0, DirectoryEntryLength);
-                this.CentralDirectoryNode = GetDirectoryEntry(direntdata, 0);
+                RS5DirectoryEntry centralDirectoryNode = GetDirectoryEntry(direntdata, 0);
 
-                if (offset == CentralDirectoryNode.DataOffset)
+                if (offset == centralDirectoryNode.DataOffset)
                 {
-                    byte[] directoryData = CentralDirectoryNode.Data.ChunkData.ReadBytes(CentralDirectoryNode.DataLength);
+                    byte[] directoryData = centralDirectoryNode.Data.ChunkData.ReadBytes(centralDirectoryNode.DataLength);
                     int nrents = directoryData.Length / DirectoryEntryLength;
+                    CentralDirectoryEntries = new RS5DirectoryEntry[nrents];
+                    CentralDirectoryLookup = new Dictionary<string, int>();
+                    CentralDirectoryEntries[0] = centralDirectoryNode;
 
                     for (int i = 1; i < nrents; i++)
                     {
                         RS5DirectoryEntry dirent = GetDirectoryEntry(directoryData, i * DirectoryEntryLength);
-                        CentralDirectory[dirent.Name] = dirent;
+                        CentralDirectoryEntries[i] = dirent;
+                        CentralDirectoryLookup[dirent.Name] = i;
                     }
                 }
                 else
@@ -117,6 +121,39 @@ namespace LibRS5
             else
             {
                 throw new InvalidDataException("File is not an RS5 file");
+            }
+        }
+
+        public IEnumerator<RS5DirectoryEntry> GetEnumerator()
+        {
+            foreach (RS5DirectoryEntry dirent in CentralDirectoryEntries)
+            {
+                if (dirent != null && dirent.Name != "")
+                {
+                    yield return dirent;
+                }
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
+        public bool ContainsKey(string name)
+        {
+            return CentralDirectoryLookup.ContainsKey(name);
+        }
+
+        public RS5DirectoryEntry this[string name]
+        {
+            get
+            {
+                return CentralDirectoryEntries[CentralDirectoryLookup[name]];
+            }
+            set
+            {
+
             }
         }
     }

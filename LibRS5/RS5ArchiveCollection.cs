@@ -13,9 +13,9 @@ namespace LibRS5
 
             foreach (RS5Archive archive in this)
             {
-                foreach (KeyValuePair<string, RS5DirectoryEntry> dirent_kvp in archive.CentralDirectory)
+                foreach (RS5DirectoryEntry dirent in archive)
                 {
-                    directory[dirent_kvp.Key] = dirent_kvp.Value;
+                    directory[dirent.Name] = dirent;
                 }
             }
 
