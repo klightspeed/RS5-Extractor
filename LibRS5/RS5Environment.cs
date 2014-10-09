@@ -258,6 +258,7 @@ namespace LibRS5
             else if (data is IDictionary)
             {
                 outstream.WriteByte((byte)'T');
+                WriteKeyValuePairs(outstream, (IDictionary)data);
             }
             else
             {
