@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.IO;
+using Ionic.Zlib;
 
 namespace LibRS5
 {
@@ -20,6 +21,59 @@ namespace LibRS5
 
         protected RS5Archive()
         {
+        }
+
+        protected RS5DirectoryEntry GetDirectoryEntry(byte[] direntData)
+        {
+            long dataoffset = BitConverter.ToInt64(direntData, 0);
+            int datalength = BitConverter.ToInt32(direntData, 8);
+            string type = Encoding.ASCII.GetString(direntData, 20, 4);
+            int allocsize = BitConverter.ToInt32(direntData, 24);
+            bool iscompressed = (allocsize & 1) != 0;
+            allocsize = (allocsize == 0) ? datalength : allocsize;
+            long timestamp = BitConverter.ToInt64(direntData, 32);
+            DateTime modtime = timestamp == 0 ? DateTime.MinValue : DateTime.FromFileTimeUtc(timestamp);
+            string name = Encoding.ASCII.GetString(direntData.Skip(40).TakeWhile(c => c != 0).ToArray());
+
+            return new RS5DirectoryEntry(ArchiveStream, dataoffset, datalength, allocsize, iscompressed, name, type, modtime);
+        }
+
+        protected byte[] GetDirentBytes(long dataoffset, int datalength, int allocsize, bool iscompressed, string name, string type, DateTime modtime)
+        {
+            byte[] direntdata = new byte[168];
+
+            Array.Copy(BitConverter.GetBytes(dataoffset), 0, direntdata, 0, 8);
+            Array.Copy(BitConverter.GetBytes(datalength), 0, direntdata, 8, 4);
+            
+            if (iscompressed)
+            {
+                Array.Copy(BitConverter.GetBytes(0x80000000UL), 0, direntdata, 12, 4);
+                Array.Copy(BitConverter.GetBytes(0x00000300UL), 0, direntdata, 16, 4);
+                Array.Copy(BitConverter.GetBytes(((long)allocsize << 1) | 1), 0, direntdata, 24, 8);
+            }
+
+            Encoding.ASCII.GetBytes(type, 0, type.Length > 4 ? 4 : type.Length, direntdata, 20);
+            Array.Copy(BitConverter.GetBytes(modtime == DateTime.MinValue ? 0 : modtime.ToFileTimeUtc()), 0, direntdata, 32, 8);
+            Encoding.ASCII.GetBytes(name, 0, name.Length > 127 ? 127 : name.Length, direntdata, 40);
+
+            return direntdata;
+        }
+
+        protected long Write(RS5Chunk chunk, long direntoffset, long dataoffset, string name, string type, DateTime modtime)
+        {
+            ArchiveStream.Seek(dataoffset, SeekOrigin.Begin);
+
+            using (ZlibStream zstream = new ZlibStream(ArchiveStream, CompressionMode.Compress, true))
+            {
+                chunk.ChunkData.CopyTo(zstream);
+            }
+
+            long comprlen = ArchiveStream.Position - dataoffset;
+            byte[] direntdata = GetDirentBytes(dataoffset, (int)comprlen, (int)chunk.TotalSize, true, name, type, modtime);
+
+            ArchiveStream.Seek(direntoffset, SeekOrigin.Begin);
+            ArchiveStream.Write(direntdata, 0, direntdata.Length);
+            return comprlen;
         }
 
         protected void OpenExisting(Stream filestrm)
@@ -49,7 +103,7 @@ namespace LibRS5
                         filestrm.Read(dirent_data, 0, dirent_length);
                         if (dirent_data.Take(12).Select(c => c != 0).Aggregate((a, b) => (a || b)))
                         {
-                            RS5DirectoryEntry dirent = new RS5DirectoryEntry(filestrm, dirent_data);
+                            RS5DirectoryEntry dirent = GetDirectoryEntry(dirent_data);
                             CentralDirectory[dirent.Name] = dirent;
                         }
                     }

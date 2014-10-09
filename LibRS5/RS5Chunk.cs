@@ -148,8 +148,8 @@ namespace LibRS5
 
     public class RS5Object : RS5Chunk
     {
-        public RS5Object(Stream filestream, long offset, int length, int allocsize)
-            : base(new CompressedSubStream(filestream, offset, allocsize))
+        public RS5Object(Stream filestream, long offset, int length, int allocsize, bool iscompressed)
+            : base(iscompressed ? new CompressedSubStream(filestream, offset, allocsize) : new SubStream(filestream, offset, length))
         {
         }
     }

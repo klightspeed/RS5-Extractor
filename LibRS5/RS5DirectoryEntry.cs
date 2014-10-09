@@ -18,6 +18,11 @@ namespace LibRS5
         public string Name { get; private set; }
         public string Type { get; private set; }
 
+        public bool IsCompressed { get; private set; }
+        public long DataOffset { get; private set; }
+        public int DataLength { get; private set; }
+        public int AllocSize { get; private set; }
+
         public RS5Chunk Data
         {
             get
@@ -38,15 +43,13 @@ namespace LibRS5
             }
         }
 
-        public RS5DirectoryEntry(Stream filestream, byte[] direntData)
+        public RS5DirectoryEntry(Stream filestream, long dataoffset, int datalength, int allocsize, bool iscompressed, string name, string type, DateTime modtime)
         {
-            long dataoffset = BitConverter.ToInt64(direntData, 0);
-            int datalength = BitConverter.ToInt32(direntData, 8);
-            this.Type = Encoding.ASCII.GetString(direntData, 20, 4);
-            int allocsize = BitConverter.ToInt32(direntData, 24);
-            this.ModTime = DateTime.FromFileTimeUtc(BitConverter.ToInt64(direntData, 32));
-            this.Name = Encoding.ASCII.GetString(direntData.Skip(40).TakeWhile(c => c != 0).ToArray());
-            this.DataFactory = () => new RS5Object(filestream, dataoffset, datalength, allocsize);
+            this.Name = name;
+            this.Type = type;
+            this.ModTime = modtime;
+            this.IsCompressed = iscompressed;
+            this.DataFactory = () => new RS5Object(filestream, dataoffset, datalength, allocsize, iscompressed);
         }
 
         public RS5DirectoryEntry(RS5Chunk chunk, string name, string type, DateTime modtime)
@@ -55,33 +58,6 @@ namespace LibRS5
             this.Name = name;
             this.Type = type;
             this.ModTime = modtime;
-        }
-
-        public long Write(Stream filestream, long direntoffset, long dataoffset)
-        {
-            RS5Chunk data = Data;
-            filestream.Seek(dataoffset, SeekOrigin.Begin);
-            
-            using (ZlibStream zstream = new ZlibStream(filestream, CompressionMode.Compress, true))
-            {
-                data.ChunkData.CopyTo(zstream);
-            }
-
-            long comprlen = filestream.Position - dataoffset;
-            byte[] direntdata = new byte[168];
-            
-            Array.Copy(BitConverter.GetBytes(dataoffset), 0, direntdata, 0, 8);
-            Array.Copy(BitConverter.GetBytes(comprlen), 0, direntdata, 8, 4);
-            Array.Copy(BitConverter.GetBytes(0x80000000UL), 0, direntdata, 12, 4);
-            Array.Copy(BitConverter.GetBytes(0x00000300UL), 0, direntdata, 16, 4);
-            Encoding.ASCII.GetBytes(Type, 0, Type.Length > 4 ? 4 : Type.Length, direntdata, 20);
-            Array.Copy(BitConverter.GetBytes((long)data.TotalSize * 2), 0, direntdata, 24, 8);
-            Array.Copy(BitConverter.GetBytes(ModTime.ToFileTimeUtc()), 0, direntdata, 32, 8);
-            Encoding.ASCII.GetBytes(Name, 0, Name.Length > 127 ? 127 : Name.Length, direntdata, 40);
-            
-            filestream.Seek(direntoffset, SeekOrigin.Begin);
-            filestream.Write(direntdata, 0, direntdata.Length);
-            return comprlen;
         }
     }
 }
