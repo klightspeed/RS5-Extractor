@@ -49,6 +49,9 @@ namespace LibRS5
             this.Type = type;
             this.ModTime = modtime;
             this.IsCompressed = iscompressed;
+            this.DataOffset = dataoffset;
+            this.DataLength = datalength;
+            this.AllocSize = allocsize;
             this.DataFactory = () => new RS5Object(filestream, dataoffset, datalength, allocsize, iscompressed);
         }
 

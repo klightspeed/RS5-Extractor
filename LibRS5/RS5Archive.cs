@@ -12,6 +12,9 @@ namespace LibRS5
         private Stream ArchiveStream { get; set; }
         public Dictionary<string, RS5DirectoryEntry> CentralDirectory { get; set; }
 
+        private RS5DirectoryEntry CentralDirectoryNode { get; set; }
+        private int DirectoryEntryLength { get; set; }
+
         public static RS5Archive Open(Stream filestrm)
         {
             RS5Archive archive = new RS5Archive();
@@ -23,17 +26,19 @@ namespace LibRS5
         {
         }
 
-        protected RS5DirectoryEntry GetDirectoryEntry(byte[] direntData)
+        protected RS5DirectoryEntry GetDirectoryEntry(byte[] direntData, int offset)
         {
-            long dataoffset = BitConverter.ToInt64(direntData, 0);
-            int datalength = BitConverter.ToInt32(direntData, 8);
-            string type = Encoding.ASCII.GetString(direntData, 20, 4);
-            int allocsize = BitConverter.ToInt32(direntData, 24);
+            long dataoffset = BitConverter.ToInt64(direntData, offset + 0);
+            int datalength = BitConverter.ToInt32(direntData, offset + 8);
+            string type = Encoding.ASCII.GetString(direntData, offset + 20, 4);
+            int allocsize = BitConverter.ToInt32(direntData, offset + 24);
             bool iscompressed = (allocsize & 1) != 0;
             allocsize = (allocsize == 0) ? datalength : allocsize;
-            long timestamp = BitConverter.ToInt64(direntData, 32);
+            long timestamp = BitConverter.ToInt64(direntData, offset + 32);
             DateTime modtime = timestamp == 0 ? DateTime.MinValue : DateTime.FromFileTimeUtc(timestamp);
-            string name = Encoding.ASCII.GetString(direntData.Skip(40).TakeWhile(c => c != 0).ToArray());
+            byte[] namebytes = new byte[DirectoryEntryLength - 40];
+            Array.Copy(direntData, 40, namebytes, 0, DirectoryEntryLength - 40);
+            string name = Encoding.ASCII.GetString(namebytes.TakeWhile(c => c != 0).ToArray());
 
             return new RS5DirectoryEntry(ArchiveStream, dataoffset, datalength, allocsize, iscompressed, name, type, modtime);
         }
@@ -80,32 +85,28 @@ namespace LibRS5
         {
             this.ArchiveStream = filestrm;
             this.CentralDirectory = new Dictionary<string, RS5DirectoryEntry>();
-            filestrm.Seek(0, SeekOrigin.Begin);
+            this.ArchiveStream.Seek(0, SeekOrigin.Begin);
             byte[] fileheader = new byte[24];
-            filestrm.Read(fileheader, 0, 24);
+            this.ArchiveStream.Read(fileheader, 0, 24);
             string magic = Encoding.ASCII.GetString(fileheader, 0, 8);
             if (magic == "CFILEHDR")
             {
-                long directory_offset = BitConverter.ToInt64(fileheader, 8);
-                int dirent_length = BitConverter.ToInt32(fileheader, 16);
-                byte[] dirent_data = new byte[dirent_length];
-                filestrm.Seek(directory_offset, SeekOrigin.Begin);
-                filestrm.Read(dirent_data, 0, dirent_length);
-                long offset = BitConverter.ToInt64(dirent_data, 0);
-                long length = BitConverter.ToInt32(dirent_data, 8);
-                int flags = BitConverter.ToInt32(dirent_data, 12);
+                long offset = BitConverter.ToInt64(fileheader, 8);
+                this.DirectoryEntryLength = BitConverter.ToInt32(fileheader, 16);
+                byte[] direntdata = new byte[this.DirectoryEntryLength];
+                this.ArchiveStream.Seek(offset, SeekOrigin.Begin);
+                this.ArchiveStream.Read(direntdata, 0, DirectoryEntryLength);
+                this.CentralDirectoryNode = GetDirectoryEntry(direntdata, 0);
 
-                if (offset == directory_offset)
+                if (offset == CentralDirectoryNode.DataOffset)
                 {
-                    for (int i = 1; i < (length / dirent_length); i++)
+                    byte[] directoryData = CentralDirectoryNode.Data.ChunkData.ReadBytes(CentralDirectoryNode.DataLength);
+                    int nrents = directoryData.Length / DirectoryEntryLength;
+
+                    for (int i = 1; i < nrents; i++)
                     {
-                        filestrm.Seek(directory_offset + i * dirent_length, SeekOrigin.Begin);
-                        filestrm.Read(dirent_data, 0, dirent_length);
-                        if (dirent_data.Take(12).Select(c => c != 0).Aggregate((a, b) => (a || b)))
-                        {
-                            RS5DirectoryEntry dirent = GetDirectoryEntry(dirent_data);
-                            CentralDirectory[dirent.Name] = dirent;
-                        }
+                        RS5DirectoryEntry dirent = GetDirectoryEntry(directoryData, i * DirectoryEntryLength);
+                        CentralDirectory[dirent.Name] = dirent;
                     }
                 }
                 else
