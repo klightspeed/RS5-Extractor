@@ -30,42 +30,6 @@ namespace RS5_Extractor
 
         private static string DefaultExtension = "bin";
 
-        private static void ProcessRS5File(Stream filestrm, Dictionary<string, RS5DirectoryEntry> directory)
-        {
-            filestrm.Seek(0, SeekOrigin.Begin);
-            byte[] fileheader = new byte[24];
-            filestrm.Read(fileheader, 0, 24);
-            string magic = Encoding.ASCII.GetString(fileheader, 0, 8);
-            if (magic == "CFILEHDR")
-            {
-                long directory_offset = BitConverter.ToInt64(fileheader, 8);
-                int dirent_length = BitConverter.ToInt32(fileheader, 16);
-                byte[] dirent_data = new byte[dirent_length];
-                filestrm.Seek(directory_offset, SeekOrigin.Begin);
-                filestrm.Read(dirent_data, 0, dirent_length);
-                long offset = BitConverter.ToInt64(dirent_data, 0);
-                long length = BitConverter.ToInt32(dirent_data, 8);
-                int flags = BitConverter.ToInt32(dirent_data, 12);
-
-                if (offset == directory_offset)
-                {
-                    for (int i = 1; i < (length / dirent_length); i++)
-                    {
-                        filestrm.Seek(directory_offset + i * dirent_length, SeekOrigin.Begin);
-                        filestrm.Read(dirent_data, 0, dirent_length);
-                        if (dirent_data.Take(12).Select(c => c != 0).Aggregate((a, b) => (a || b)))
-                        {
-                            RS5DirectoryEntry dirent = new RS5DirectoryEntry(filestrm, dirent_data);
-                            directory[dirent.Name] = dirent;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                throw new InvalidDataException("File is not an RS5 file");
-            }
-        }
 
         private static Dictionary<string, List<AnimationClip>> ProcessEnvironmentAnimations(RS5Environment environ)
         {
@@ -195,10 +159,11 @@ namespace RS5_Extractor
             }
         }
 
-        private static void OpenRS5Files(Dictionary<string, RS5DirectoryEntry> directory)
+        private static Dictionary<string, RS5DirectoryEntry> OpenRS5Files()
         {
             string path = Environment.CurrentDirectory;
             string[] rs5files = Directory.EnumerateFiles(path, "*.rs5").ToArray();
+            RS5ArchiveCollection archives = new RS5ArchiveCollection();
 
             if (rs5files.Length == 0)
             {
@@ -231,9 +196,11 @@ namespace RS5_Extractor
                 string filepath = Path.Combine(path, filename);
                 Console.WriteLine("Using {0} file from {1}", filename, filepath);
                 Console.Write("Processing {0} central directory ... ", filename);
-                ProcessRS5File(File.Open(filepath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite), directory);
+                archives.Add(RS5Archive.Open(File.Open(filepath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)));
                 Console.WriteLine("Done");
             }
+
+            return archives.GetDirectory();
         }
         
         private static void WriteRS5Contents(Dictionary<string, RS5DirectoryEntry> directory, Dictionary<string, List<AnimationClip>> animclips)
@@ -380,8 +347,7 @@ namespace RS5_Extractor
         {
             try
             {
-                Dictionary<string, RS5DirectoryEntry> directory = new Dictionary<string, RS5DirectoryEntry>();
-                OpenRS5Files(directory);
+                Dictionary<string, RS5DirectoryEntry> directory = OpenRS5Files();
                 Console.Write("Processing environment ... ");
                 SubStream environdata = directory["environment"].Data.Chunks["DATA"].Data;
                 using (Stream environfile = File.Create("environment.bin"))

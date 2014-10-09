@@ -52,6 +52,8 @@
     <Compile Include="Matrix4.cs" />
     <Compile Include="Model.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RS5Archive.cs" />
+    <Compile Include="RS5ArchiveCollection.cs" />
     <Compile Include="RS5Chunk.cs" />
     <Compile Include="RS5DirectoryEntry.cs" />
     <Compile Include="RS5Environment.cs" />
