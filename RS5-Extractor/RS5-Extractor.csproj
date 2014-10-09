@@ -37,6 +37,10 @@
     <StartupObject />
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Ionic.Zip, Version=1.9.3.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\DotNetZip.1.9.3\lib\net20\Ionic.Zip.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
@@ -50,19 +54,6 @@
     <Compile Include="AnimationClip.cs" />
     <Compile Include="AnimationSequence.cs" />
     <Compile Include="Collada.cs" />
-    <Compile Include="DotNetZip\CommonSrc\CRC32.cs" />
-    <Compile Include="DotNetZip\Zlib\Deflate.cs" />
-    <Compile Include="DotNetZip\Zlib\DeflateStream.cs" />
-    <Compile Include="DotNetZip\Zlib\GZipStream.cs" />
-    <Compile Include="DotNetZip\Zlib\Inflate.cs" />
-    <Compile Include="DotNetZip\Zlib\InfTree.cs" />
-    <Compile Include="DotNetZip\Zlib\ParallelDeflateOutputStream.cs" />
-    <Compile Include="DotNetZip\Zlib\Tree.cs" />
-    <Compile Include="DotNetZip\Zlib\Zlib.cs" />
-    <Compile Include="DotNetZip\Zlib\ZlibBaseStream.cs" />
-    <Compile Include="DotNetZip\Zlib\ZlibCodec.cs" />
-    <Compile Include="DotNetZip\Zlib\ZlibConstants.cs" />
-    <Compile Include="DotNetZip\Zlib\ZlibStream.cs" />
     <Compile Include="Matrix4.cs" />
     <Compile Include="RS5Environment.cs" />
     <Compile Include="Joint.cs" />
@@ -81,12 +72,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
+    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="DotNetZip\License.txt" />
-    <Content Include="DotNetZip\License.zlib.txt" />
-    <Content Include="DotNetZip\Zlib\LICENSE.jzlib.txt" />
-    <Content Include="DotNetZip\Zlib\License.zlib.txt" />
     <Content Include="License.txt" />
   </ItemGroup>
   <ItemGroup />
