@@ -33,3 +33,6 @@ obj/
 
 # Office Temp Files
 ~$*
+
+#Package Binaries
+packages/
