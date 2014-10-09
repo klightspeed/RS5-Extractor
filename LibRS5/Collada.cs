@@ -5,7 +5,7 @@ using System.Text;
 using System.Xml.Linq;
 using System.IO;
 
-namespace RS5_Extractor
+namespace LibRS5
 {
     public class Collada : XDocument
     {

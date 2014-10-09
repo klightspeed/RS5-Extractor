@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Drawing;
 
-namespace RS5_Extractor
+namespace LibRS5
 {
     public class Vertex
     {

@@ -6,6 +6,7 @@ using System.Text;
 using System.IO;
 using System.Xml;
 using System.Xml.Linq;
+using LibRS5;
 
 namespace RS5_Extractor
 {

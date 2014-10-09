@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 using System.IO;
 using System.Diagnostics;
 
-namespace RS5_Extractor
+namespace LibRS5
 {
     public class DDSImage
     {

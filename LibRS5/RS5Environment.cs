@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using System.IO;
 
-namespace RS5_Extractor
+namespace LibRS5
 {
     public class RS5Environment
     {

@@ -7,7 +7,7 @@ using System.Drawing;
 using System.IO;
 using System.Xml.Linq;
 
-namespace RS5_Extractor
+namespace LibRS5
 {
     public class Model
     {

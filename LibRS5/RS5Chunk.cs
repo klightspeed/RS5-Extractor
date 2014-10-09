@@ -6,7 +6,7 @@ using System.IO;
 using Ionic.Zlib;
 
 
-namespace RS5_Extractor
+namespace LibRS5
 {
     public class RS5Chunk
     {

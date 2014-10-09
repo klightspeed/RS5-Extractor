@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace RS5_Extractor
+namespace LibRS5
 {
     public struct Matrix4 : IEnumerable, IEnumerable<double>
     {
