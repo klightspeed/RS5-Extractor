@@ -191,7 +191,7 @@ namespace RS5_Extractor
                 }
             }
 
-            foreach (string filename in rs5files.OrderByDescending(v => v))
+            foreach (string filename in rs5files.OrderBy(v => v))
             {
                 string filepath = Path.Combine(path, filename);
                 Console.WriteLine("Using {0} file from {1}", filename, filepath);

@@ -15,7 +15,10 @@ namespace LibRS5
             {
                 foreach (RS5DirectoryEntry dirent in archive)
                 {
-                    directory[dirent.Name] = dirent;
+                    if (!directory.ContainsKey(dirent.Name))
+                    {
+                        directory[dirent.Name] = dirent;
+                    }
                 }
             }
 
