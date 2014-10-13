@@ -286,6 +286,17 @@ namespace LibRS5
                 {
                     Index = index;
                 }
+
+                public IndexedJoint(IndexedJoint joint)
+                    : base(joint)
+                {
+                    Index = joint.Index;
+                }
+
+                public override Joint Clone()
+                {
+                    return new IndexedJoint(this);
+                }
             }
 
             protected static AnimationSequence GetAnimation(Matrix4 transform, double framerate, Matrix4 initialpose, Matrix4[] animframes)

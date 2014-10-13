@@ -29,7 +29,7 @@ namespace LibRS5
         {
         }
 
-        public Joint Clone()
+        public virtual Joint Clone()
         {
             return new Joint(this);
         }
