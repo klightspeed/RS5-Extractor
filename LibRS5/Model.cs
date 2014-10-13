@@ -301,21 +301,21 @@ namespace LibRS5
 
             protected static AnimationSequence GetAnimation(Matrix4 transform, double framerate, Matrix4 initialpose, Matrix4[] animframes)
             {
-                return new AnimationSequence(framerate, initialpose, animframes.Select((f, i) => new AnimationFrame(i, f / transform)), animframes.Length);
+                return new AnimationSequence(framerate, initialpose, animframes.Select((f, i) => new AnimationFrame(i, transform * f)), animframes.Length);
             }
 
-            protected static Joint GetJoint(Matrix4 transform, JointData[] jointdata, int index)
+            protected static Joint GetJoint(Matrix4 transform, Matrix4 animtransform, Matrix4 parentbind, JointData[] jointdata, int index)
             {
                 Matrix4 revbind = jointdata[index].ReverseBindingMatrix / transform;
-                Matrix4 initialpose = 1 / revbind;
+                Matrix4 initialpose = parentbind / revbind;
                 return new IndexedJoint(
                     index,
                     String.Format("joint{0}", index),
                     jointdata[index].Name,
                     revbind,
                     initialpose,
-                    jointdata.Where(j => j.Parent == index).Select(j => GetJoint(Matrix4.Identity, jointdata, j.Index)),
-                    GetAnimation(transform, 24.0, initialpose, jointdata[index].AnimationFrames)
+                    jointdata.Where(j => j.Parent == index).Select(j => GetJoint(transform, Matrix4.Identity, revbind, jointdata, j.Index)),
+                    GetAnimation(animtransform, 24.0, initialpose, jointdata[index].AnimationFrames)
                 );
             }
 
@@ -331,7 +331,7 @@ namespace LibRS5
 
                     JointData[] jointdata = Enumerable.Range(0, numjoints).Select(i => new JointData(JNTS, FRMS, numjoints, numframes, i)).ToArray();
 
-                    return GetJoint(RootTransform, jointdata, jointdata.Where(j => j.Parent == -1).Single().Index);
+                    return GetJoint(RootTransform, RootTransform, Matrix4.Identity, jointdata, jointdata.Where(j => j.Parent == -1).Single().Index);
                 }
                 else
                 {
