@@ -662,7 +662,7 @@ namespace LibRS5
         {
             DDSImage image = Image;
             Bitmap bmp = image == null ? null : image.Bitmap;
-            string filename = "." + Path.DirectorySeparatorChar + Filename;
+            string filename = Path.Combine(".", Filename);
 
             switch (Path.GetExtension(filename))
             {
@@ -677,7 +677,7 @@ namespace LibRS5
         {
             foreach (string name in new string[] { DDSFilename, PNGFilename, JPEGFilename })
             {
-                string filename = "." + Path.DirectorySeparatorChar + name;
+                string filename = Path.Combine(".", name);
                 if (File.Exists(filename))
                 {
                     return filename;
@@ -694,7 +694,7 @@ namespace LibRS5
 
         public void SaveDDS()
         {
-            string filename = "." + Path.DirectorySeparatorChar + DDSFilename;
+            string filename = Path.Combine(".", DDSFilename);
             SaveDDS(filename, Image, ModTime);
         }
 

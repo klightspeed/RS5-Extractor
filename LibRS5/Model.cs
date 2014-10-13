@@ -523,44 +523,44 @@ namespace LibRS5
 
         public Collada.Exporter CreateMultimeshExporter(bool overwrite)
         {
-            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".multimesh.dae", () => HasMultipleTextures, () => GetSubMeshes(), () => null, () => ExtraData, CreatTime, ModTime, overwrite);
+            return new Collada.Exporter(Path.Combine(".", Name + ".multimesh.dae"), () => HasMultipleTextures, () => GetSubMeshes(), () => null, () => ExtraData, CreatTime, ModTime, overwrite);
         }
 
         public Collada.Exporter<T> CreateMultimeshExporter<T>(bool overwrite, T state)
         {
-            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".multimesh.dae", () => HasMultipleTextures, () => GetSubMeshes(), () => null, () => ExtraData, CreatTime, ModTime, overwrite, state);
+            return new Collada.Exporter<T>(Path.Combine(".", Name + ".multimesh.dae"), () => HasMultipleTextures, () => GetSubMeshes(), () => null, () => ExtraData, CreatTime, ModTime, overwrite, state);
         }
 
         public Collada.Exporter CreateUnanimatedExporter(bool overwrite)
         {
-            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".noanim.dae", () => true, () => GetFiltered(), () => RootJoint == null ? null : RootJoint.WithoutAnimation(), () => ExtraData, CreatTime, ModTime, overwrite);
+            return new Collada.Exporter(Path.Combine(".", Name + ".noanim.dae"), () => true, () => GetFiltered(), () => RootJoint == null ? null : RootJoint.WithoutAnimation(), () => ExtraData, CreatTime, ModTime, overwrite);
         }
 
         public Collada.Exporter<T> CreateUnanimatedExporter<T>(bool overwrite, T state)
         {
-            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".noanim.dae", () => true, () => GetFiltered(), () => RootJoint == null ? null : RootJoint.WithoutAnimation(), () => ExtraData, CreatTime, ModTime, overwrite, state);
+            return new Collada.Exporter<T>(Path.Combine(".", Name + ".noanim.dae"), () => true, () => GetFiltered(), () => RootJoint == null ? null : RootJoint.WithoutAnimation(), () => ExtraData, CreatTime, ModTime, overwrite, state);
         }
 
         public Collada.Exporter CreateAnimatedExporter(string animname, bool overwrite)
         {
-            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => IsAnimated, () => GetFiltered(), () => RootJoint, () => ExtraData, CreatTime, ModTime, overwrite);
+            return new Collada.Exporter(Path.Combine(".", Name + ".anim." + animname + ".dae"), () => IsAnimated, () => GetFiltered(), () => RootJoint, () => ExtraData, CreatTime, ModTime, overwrite);
         }
 
         public Collada.Exporter<T> CreateAnimatedExporter<T>(string animname, bool overwrite, T state)
         {
-            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => IsAnimated, () => GetFiltered(), () => RootJoint, () => ExtraData, CreatTime, ModTime, overwrite, state);
+            return new Collada.Exporter<T>(Path.Combine(".", Name + ".anim." + animname + ".dae"), () => IsAnimated, () => GetFiltered(), () => RootJoint, () => ExtraData, CreatTime, ModTime, overwrite, state);
         }
 
         public Collada.Exporter CreateTrimmedAnimatedExporter(string animname, int startframe, int numframes, double framerate, bool overwrite)
         {
             Model model = GetAnimatedModel(startframe, numframes, framerate);
-            return new Collada.Exporter("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => model.IsAnimated, () => model.GetFiltered(), () => model.RootJoint, () => ExtraData, model.CreatTime, model.ModTime, overwrite);
+            return new Collada.Exporter(Path.Combine(".", Name + ".anim." + animname + ".dae"), () => model.IsAnimated, () => model.GetFiltered(), () => model.RootJoint, () => ExtraData, model.CreatTime, model.ModTime, overwrite);
         }
 
         public Collada.Exporter<T> CreateTrimmedAnimatedExporter<T>(string animname, int startframe, int numframes, double framerate, bool overwrite, T state)
         {
             Model model = GetAnimatedModel(startframe, numframes, framerate);
-            return new Collada.Exporter<T>("." + Path.DirectorySeparatorChar + Name + ".anim." + animname + ".dae", () => model.IsAnimated, () => model.GetFiltered(), () => model.RootJoint, () => ExtraData, model.CreatTime, model.ModTime, overwrite, state);
+            return new Collada.Exporter<T>(Path.Combine(".", Name + ".anim." + animname + ".dae"), () => model.IsAnimated, () => model.GetFiltered(), () => model.RootJoint, () => ExtraData, model.CreatTime, model.ModTime, overwrite, state);
         }
 
         #endregion

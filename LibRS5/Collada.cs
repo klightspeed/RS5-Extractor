@@ -989,7 +989,7 @@ namespace LibRS5
                 Directory.CreateDirectory(dir);
             }
 
-            string path = "." + Path.DirectorySeparatorChar + String.Join(Path.DirectorySeparatorChar.ToString(), Path.GetDirectoryName(filename).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Where(d => d != "." && d != "..").Select(d => ".."));
+            string path = Path.Combine(".", Path.Combine(Path.GetDirectoryName(filename).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Where(d => d != "." && d != "..").Select(d => "..").ToArray()));
             
             XDocument doc = new Collada(meshes, rootjoint, extradata, path, creattime, modtime);
             doc.Save(filename);
