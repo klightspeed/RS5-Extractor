@@ -638,7 +638,7 @@ namespace LibRS5
 
                 this.Add(
                     new XAttribute("depth", "1"),
-                    new XElement(ns + "init_from", (path + texture.Filename).Replace('\\', '/'))
+                    new XElement(ns + "init_from", Path.Combine(path, texture.Filename).Replace('\\', '/'))
                 );
             }
         }
