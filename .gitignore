@@ -27,6 +27,7 @@ obj/
 [Bb]in
 [Dd]ebug*/
 [Rr]elease*/
+.vs
 
 #Project files
 [Bb]uild/
