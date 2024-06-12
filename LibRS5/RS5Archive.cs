@@ -133,8 +133,11 @@ namespace LibRS5
                     for (int i = 1; i < nrents; i++)
                     {
                         RS5DirectoryEntry dirent = GetDirectoryEntry(directoryData, i * DirectoryEntryLength);
-                        CentralDirectoryEntries[i] = dirent;
-                        CentralDirectoryLookup[dirent.Name] = i;
+                        if (dirent.DataLength > 0)
+                        {
+                            CentralDirectoryEntries[i] = dirent;
+                            CentralDirectoryLookup[dirent.Name] = i;
+                        }
                     }
                 }
                 else

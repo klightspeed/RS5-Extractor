@@ -191,7 +191,7 @@ namespace RS5_Extractor
                 }
             }
 
-            foreach (string filename in rs5files.OrderBy(v => v))
+            foreach (string filename in rs5files.OrderByDescending(v => v))
             {
                 string filepath = Path.Combine(path, filename);
                 Console.WriteLine("Using {0} file from {1}", filename, filepath);
@@ -350,19 +350,12 @@ namespace RS5_Extractor
                 Dictionary<string, RS5DirectoryEntry> directory = OpenRS5Files();
                 Console.Write("Processing environment ... ");
                 SubStream environdata = directory["environment"].Data.Chunks["DATA"].Data;
-                using (Stream environfile = File.Create("environment.bin"))
-                {
-                    environdata.CopyTo(environfile);
-                }
-                RS5Environment environ = new RS5Environment(environdata);
-                Dictionary<string, List<AnimationClip>> animclips = ProcessEnvironmentAnimations(environ);
-                Console.WriteLine("Done");
-                XElement environ_xml = environ.ToXML();
-
                 try
                 {
-                    environ_xml.Save("environment.xml");
-                    WriteRS5Contents(directory, animclips);
+                    using (Stream environfile = File.Create("environment.bin"))
+                    {
+                        environdata.CopyTo(environfile);
+                    }
                 }
                 catch (UnauthorizedAccessException)
                 {
@@ -377,10 +370,18 @@ namespace RS5_Extractor
                     if (keyinfo.KeyChar == 'y' || keyinfo.KeyChar == 'Y')
                     {
                         Environment.CurrentDirectory = exepath;
-                        environ_xml.Save("environment.xml");
-                        WriteRS5Contents(directory, animclips);
+                        using (Stream environfile = File.Create("environment.bin"))
+                        {
+                            environdata.CopyTo(environfile);
+                        }
                     }
                 }
+                RS5Environment environ = new RS5Environment(environdata);
+                Dictionary<string, List<AnimationClip>> animclips = ProcessEnvironmentAnimations(environ);
+                Console.WriteLine("Done");
+                XElement environ_xml = environ.ToXML();
+                environ_xml.Save("environment.xml");
+                WriteRS5Contents(directory, animclips);
             }
             catch (FileNotFoundException)
             {
